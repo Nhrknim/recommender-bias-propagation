@@ -218,3 +218,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project data artifacts
+# The notebook downloads and extracts MovieLens 1M from the public GroupLens URL.
+ml-1m.zip
+ml-1m/
