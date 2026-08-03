@@ -23,12 +23,15 @@ python -m ipykernel install --user --name=recommender-bias-venv --display-name "
 
 ```text
 .
-├── phase_1_data_prep.ipynb       # Phase 1: Data prep and baseline inequality
-├── phase_2_models/               # Phase 2: Cornac model experimentation
-│   └── phase_2_cornac_benchmark.ipynb
+├── notebooks/
+│   ├── phase_1_data_prep.ipynb       # Phase 1: Data prep and baseline inequality
+│   └── phase_2_cornac_benchmark.ipynb # Phase 2: Cornac model experimentation
 ├── docs/
 │   ├── phase1_data_prep.md
 │   └── phase2_cornac_models.md   # Documentation for Phase 2
+├── papers/                       # Literature & PDF references
+├── tex/                          # LaTeX manuscripts
+├── logs/                         # Execution logs
 ├── requirements.txt
 └── README.md
 ```
@@ -78,5 +81,5 @@ To run the benchmarking notebook:
 
 ```bash
 source .venv/bin/activate
-jupyter notebook phase_2_models/phase_2_cornac_benchmark.ipynb
+jupyter notebook notebooks/phase_2_cornac_benchmark.ipynb
 ```

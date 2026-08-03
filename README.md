@@ -21,14 +21,18 @@ This repository supports a research project on how recommender systems may ampli
 
 ```text
 .
-├── phase_1_data_prep.ipynb       # Phase 1: Data prep & baseline inequality metrics
-├── phase_2_models/               # Phase 2: Cornac model training & benchmarking
-│   └── phase_2_cornac_benchmark.ipynb
-├── docs/
-│   ├── phase1_data_prep.md      # Methodology notes for Phase 1
-│   ├── phase2_cornac_models.md  # Methodology & documentation for Phase 2 Cornac models
-│   └── images/                  # Generated figures
-├── requirements.txt             # Environment dependencies including Cornac
+├── notebooks/                        # Jupyter notebooks for experiment phases
+│   ├── phase_1_data_prep.ipynb       # Phase 1: Data prep & baseline inequality metrics
+│   └── phase_2_cornac_benchmark.ipynb # Phase 2: Cornac model training & benchmarking
+├── docs/                             # Methodology & experiment documentation
+│   ├── phase1_data_prep.md
+│   ├── phase2_cornac_models.md
+│   └── images/                       # Generated figures
+├── papers/                           # Reference literature & PDF papers
+├── tex/                              # LaTeX manuscript source files
+│   └── zeroth.tex
+├── logs/                             # Experiment run logs
+├── requirements.txt                  # Environment dependencies including Cornac
 └── README.md
 ```
 
@@ -49,10 +53,14 @@ pip install -r requirements.txt
 python -m ipykernel install --user --name=recommender-bias-venv --display-name "Python (.venv)"
 
 # 4. Launch Jupyter Notebook
-jupyter notebook
+jupyter notebook notebooks/
 ```
 
-## Documentation
+## Documentation & Assets
 
-- Phase 1 Details: [docs/phase1_data_prep.md](file:///Users/shravanpandala/Projects/recommender-bias-propagation/docs/phase1_data_prep.md)
-- Phase 2 Cornac Models: [docs/phase2_cornac_models.md](file:///Users/shravanpandala/Projects/recommender-bias-propagation/docs/phase2_cornac_models.md)
+- **Phase 1 Notebook**: [notebooks/phase_1_data_prep.ipynb](file:///Users/shravanpandala/Projects/recommender-bias-propagation/notebooks/phase_1_data_prep.ipynb)
+- **Phase 1 Documentation**: [docs/phase1_data_prep.md](file:///Users/shravanpandala/Projects/recommender-bias-propagation/docs/phase1_data_prep.md)
+- **Phase 2 Notebook**: [notebooks/phase_2_cornac_benchmark.ipynb](file:///Users/shravanpandala/Projects/recommender-bias-propagation/notebooks/phase_2_cornac_benchmark.ipynb)
+- **Phase 2 Documentation**: [docs/phase2_cornac_models.md](file:///Users/shravanpandala/Projects/recommender-bias-propagation/docs/phase2_cornac_models.md)
+- **LaTeX Writeup**: [tex/zeroth.tex](file:///Users/shravanpandala/Projects/recommender-bias-propagation/tex/zeroth.tex)
+- **Reference Papers**: [papers/](file:///Users/shravanpandala/Projects/recommender-bias-propagation/papers)
