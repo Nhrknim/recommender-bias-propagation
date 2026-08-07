@@ -53,25 +53,46 @@ The benchmarking pipeline evaluates models across two distinct implicit-feedback
 
 ## Model Zoo & Empirical Results
 
-The following recommendation algorithms were evaluated on MovieLens 1M (80/20 per-user split):
+The model zoo evaluates 7 recommendation algorithms across **MovieLens 1M** and **FilmTrust** (80/20 per-user split, positive rating threshold = 4.0 for MovieLens 1M, 3.5 for FilmTrust).
+
+### 1. MovieLens 1M Benchmark Results
 
 | Model Family | Algorithm | Cornac Class | NDCG@10 ↑ | Recall@10 ↑ | Precision@10 ↑ | MAP ↑ | MRR ↑ | Gini@10 ↓ (Popularity Bias) |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| **Baseline** | MostPop | `MostPop` | 0.0520 | 0.0573 | 0.0898 | 0.0270 | 0.2227 | **0.9944** (Max Bias) |
-| **Neighborhood** | User KNN | `UserKNN` | 0.1066 | 0.1194 | 0.1652 | 0.0560 | 0.3807 | 0.9419 |
-| **Neighborhood** | Item KNN | `ItemKNN` | **0.1147** | **0.1287** | **0.1783** | **0.0617** | **0.3957** | **0.9230** (Best Diversity) |
-| **Matrix Factorization** | BPR | `BPR` | 0.0970 | 0.1051 | 0.1506 | 0.0483 | 0.3601 | 0.9388 |
-| **Matrix Factorization** | PMF | `PMF` | 0.0887 | 0.0950 | 0.1412 | 0.0421 | 0.3410 | 0.9451 |
-| **Matrix Factorization** | MF | `MF` | 0.0910 | 0.0982 | 0.1450 | 0.0435 | 0.3485 | 0.9420 |
-| **Latent Factor / SVD** | SVD | `SVD` | 0.1105 | 0.1230 | 0.1710 | 0.0580 | 0.3882 | 0.9285 |
+| **Baseline** | MostPop | `MostPop` | 0.1489 | 0.0782 | 0.1262 | 0.0878 | 0.3107 | 0.9950 |
+| **Neighborhood** | User KNN | `UserKNN` | 0.0003 | 0.0003 | 0.0004 | 0.0147 | 0.0178 | 0.9969 |
+| **Neighborhood** | Item KNN | `ItemKNN` | 0.0367 | 0.0121 | 0.0408 | 0.0308 | 0.0809 | 0.9006 |
+| **Pairwise MF** | BPR | `BPR` | **0.2359** | **0.1423** | **0.1966** | **0.1546** | **0.4345** | 0.9247 |
+| **Probabilistic MF** | PMF | `PMF` | 0.0404 | 0.0269 | 0.0423 | 0.0311 | 0.0964 | 0.9937 |
+| **Matrix Factorization** | MF | `MF` | 0.0283 | 0.0134 | 0.0279 | 0.0254 | 0.0781 | **0.8366** (Best Coverage) |
+| **Latent Factor / SVD** | SVD | `SVD` | 0.0283 | 0.0134 | 0.0279 | 0.0254 | 0.0781 | **0.8366** (Best Coverage) |
+
+### 2. FilmTrust Benchmark Results
+
+| Model Family | Algorithm | Cornac Class | NDCG@10 ↑ | Recall@10 ↑ | Precision@10 ↑ | MAP ↑ | MRR ↑ | Gini@10 ↓ (Popularity Bias) |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| **Baseline** | MostPop | `MostPop` | **0.3038** | **0.4497** | **0.1334** | **0.2500** | **0.3452** | 0.9866 |
+| **Neighborhood** | User KNN | `UserKNN` | 0.0000 | 0.0000 | 0.0000 | 0.0023 | 0.0025 | 0.9930 |
+| **Neighborhood** | Item KNN | `ItemKNN` | 0.0025 | 0.0050 | 0.0017 | 0.0035 | 0.0069 | **0.7317** (Best Coverage) |
+| **Pairwise MF** | BPR | `BPR` | 0.2839 | 0.4339 | 0.1315 | 0.2354 | 0.3182 | 0.9866 |
+| **Probabilistic MF** | PMF | `PMF` | 0.0020 | 0.0039 | 0.0014 | 0.0101 | 0.0121 | 0.9936 |
+| **Matrix Factorization** | MF | `MF` | 0.0223 | 0.0295 | 0.0106 | 0.0174 | 0.0443 | 0.9746 |
+| **Latent Factor / SVD** | SVD | `SVD` | 0.0223 | 0.0295 | 0.0106 | 0.0174 | 0.0443 | 0.9746 |
+
+### 3. Accuracy vs. Popularity Bias Comparison Plot
+
+![Accuracy vs Popularity Bias Comparison](images/phase2_accuracy_vs_gini.png)
 
 ---
 
 ## Key Empirical Takeaways
 
-1. **Popularity Baseline (`MostPop`)**: Demonstrates maximum popularity bias (`Gini@10 = 0.9944`) while delivering the lowest ranking accuracy (`NDCG@10 = 0.0520`).
-2. **Item-based Collaborative Filtering (`ItemKNN`)**: Achieves both the **highest ranking accuracy** (`NDCG@10 = 0.1147`, `Recall@10 = 0.1287`) AND the **lowest popularity bias** (`Gini@10 = 0.9230`).
-3. **Singular Value Decomposition (`SVD`)**: Strongest matrix factorization model (`NDCG@10 = 0.1105`) with balanced catalog coverage (`Gini@10 = 0.9285`).
+1. **BPR Dominates Ranking Accuracy**: **Bayesian Personalized Ranking (`BPR`)** achieves the highest accuracy on MovieLens 1M (`NDCG@10 = 0.2359`) and a strong second on FilmTrust (`NDCG@10 = 0.2839`), proving that pairwise optimization is highly effective for implicit top-N recommendation.
+2. **Heavy Dataset Popularity Reliance**: The non-personalized baseline **`MostPop`** achieves top ranking performance on FilmTrust (`NDCG@10 = 0.3038`) and second-highest on MovieLens 1M (`NDCG@10 = 0.1489`), illustrating how heavily interactions in both benchmark datasets are concentrated around head items.
+3. **Accuracy vs. Popularity Bias Trade-Off**: Models with high NDCG@10 scores (`BPR`, `MostPop`) exhibit extreme item exposure inequality (`Gini@10 > 0.92`), confirming that top-ranking performance is driven by amplifying popular items.
+4. **Catalog Coverage / Long-Tail Surfacing**:
+   - **MF & SVD** achieve the lowest popularity bias on MovieLens 1M (`Gini@10 = 0.8366`), proving better at surfacing non-popular items.
+   - **ItemKNN** achieves the lowest popularity bias on FilmTrust (`Gini@10 = 0.7317`), serving as a prime baseline for diversity and long-tail exploration.
 
 ---
 
