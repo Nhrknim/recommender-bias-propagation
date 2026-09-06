@@ -23,15 +23,16 @@ This repository supports a research project on how recommender systems may ampli
 .
 ├── notebooks/                        # Jupyter notebooks for experiment phases
 │   ├── phase_1_data_prep.ipynb       # Phase 1: Data prep & baseline inequality metrics
-│   └── phase_2_cornac_benchmark.ipynb # Phase 2: Cornac model training & benchmarking
-├── docs/                             # Methodology & experiment documentation
-│   ├── phase1_data_prep.md
-│   ├── phase2_cornac_models.md
-│   └── images/                       # Generated figures
-├── papers/                           # Reference literature & PDF papers
-├── tex/                              # LaTeX manuscript source files
-│   └── zeroth.tex
-├── logs/                             # Experiment run logs
+│   ├── phase_2_cornac_benchmark.ipynb # Phase 2: Cornac model training & benchmarking
+│   ├── phase_2_mf_overfit.ipynb      # Phase 2: Matrix Factorization overfit analysis
+│   └── phase_3_mf_pmf_bpr.ipynb      # Phase 3: MF, PMF, BPR recommendation feedback loop experiments
+├── docs/                             # Methodology, research assets & experiment documentation
+│   ├── phase1_data_prep.md           # Phase 1 data prep methodology notes
+│   ├── phase2_cornac_models.md       # Phase 2 Cornac benchmark findings
+│   ├── images/                       # Generated figures and plot exports
+│   ├── tex/                          # Paper / manuscript LaTeX source files
+│   ├── papers/                       # Reference literature and PDF papers
+│   └── ppt/                          # Presentation slides and pitch decks
 ├── requirements.txt                  # Environment dependencies including Cornac
 └── README.md
 ```
@@ -58,9 +59,13 @@ jupyter notebook notebooks/
 
 ## Documentation & Assets
 
-- **Phase 1 Notebook**: [notebooks/phase_1_data_prep.ipynb](file:///Users/shravanpandala/Projects/recommender-bias-propagation/notebooks/phase_1_data_prep.ipynb)
-- **Phase 1 Documentation**: [docs/phase1_data_prep.md](file:///Users/shravanpandala/Projects/recommender-bias-propagation/docs/phase1_data_prep.md)
-- **Phase 2 Notebook**: [notebooks/phase_2_cornac_benchmark.ipynb](file:///Users/shravanpandala/Projects/recommender-bias-propagation/notebooks/phase_2_cornac_benchmark.ipynb)
-- **Phase 2 Documentation**: [docs/phase2_cornac_models.md](file:///Users/shravanpandala/Projects/recommender-bias-propagation/docs/phase2_cornac_models.md)
-- **LaTeX Writeup**: [tex/zeroth.tex](file:///Users/shravanpandala/Projects/recommender-bias-propagation/tex/zeroth.tex)
-- **Reference Papers**: [papers/](file:///Users/shravanpandala/Projects/recommender-bias-propagation/papers)
+- **Phase 1 Notebook**: [notebooks/phase_1_data_prep.ipynb](notebooks/phase_1_data_prep.ipynb)
+- **Phase 1 Documentation**: [docs/phase1_data_prep.md](docs/phase1_data_prep.md)
+- **Phase 2 Benchmarking Notebook**: [notebooks/phase_2_cornac_benchmark.ipynb](notebooks/phase_2_cornac_benchmark.ipynb)
+- **Phase 2 Overfit Notebook**: [notebooks/phase_2_mf_overfit.ipynb](notebooks/phase_2_mf_overfit.ipynb)
+- **Phase 2 Documentation**: [docs/phase2_cornac_models.md](docs/phase2_cornac_models.md)
+- **Phase 3 Notebook**: [notebooks/phase_3_mf_pmf_bpr.ipynb](notebooks/phase_3_mf_pmf_bpr.ipynb)
+- **LaTeX Writeup**: [docs/tex/zeroth.tex](docs/tex/zeroth.tex)
+- **Presentation Deck**: [docs/ppt/Zeroth.pdf](docs/ppt/Zeroth.pdf)
+- **Reference Papers**: [docs/papers/](docs/papers/)
+
