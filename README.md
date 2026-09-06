@@ -51,7 +51,10 @@ Expected extracted files:
 |-- phase_1_data_prep.ipynb      # Data ingestion, preprocessing, sparse matrices, baseline metrics
 |-- docs/
 |   |-- phase1_data_prep.md      # Methodology notes for Phase 1
-|   `-- images/                  # Generated figures
+|   |-- images/                  # Generated figures and plot exports
+|   |-- tex/                     # Paper / manuscript LaTeX source files
+|   |-- papers/                  # Reference literature and PDFs
+|   `-- ppt/                     # Presentation slides and pitch decks
 |-- requirements.txt             # Python environment snapshot
 `-- README.md
 ```
@@ -71,4 +74,5 @@ The notebook uses `pandas`, `numpy`, `scipy`, `matplotlib`, and `seaborn`. It as
 
 ## Documentation
 
-Detailed notes for the preprocessing decisions, sparse matrix construction, and baseline inequality analysis are in `docs/phase1_data_prep.md`.
+Detailed notes for the preprocessing decisions, sparse matrix construction, and baseline inequality analysis are in `docs/phase1_data_prep.md`. Research assets, LaTeX paper sources, reference papers, and presentation decks are organized under `docs/tex/`, `docs/papers/`, and `docs/ppt/`.
+

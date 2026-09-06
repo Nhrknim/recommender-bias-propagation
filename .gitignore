@@ -223,3 +223,19 @@ __marimo__/
 # The notebook downloads and extracts MovieLens 1M from the public GroupLens URL.
 ml-1m.zip
 ml-1m/
+
+# Documentation & LaTeX build artifacts
+docs/tex/*.aux
+docs/tex/*.log
+docs/tex/*.out
+docs/tex/*.toc
+docs/tex/*.synctex.gz
+docs/tex/*.fdb_latexmk
+docs/tex/*.fls
+docs/tex/*.bbl
+docs/tex/*.blg
+
+# Presentation lock / temporary files
+docs/ppt/~$*.pptx
+docs/ppt/~$*.ppt
+
