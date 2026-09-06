@@ -5,3 +5,5 @@ matplotlib
 seaborn
 notebook
 ipykernel
+cornac
+tqdm

@@ -1,0 +1,280 @@
+\documentclass[11pt,aspectratio=43]{beamer}
+
+% -----------------------------------------------------------------------------
+% Theme and typography
+% -----------------------------------------------------------------------------
+\usetheme{Madrid}
+\usefonttheme{serif}
+
+\definecolor{RecommenderBlue}{RGB}{40, 60, 140}
+\setbeamercolor{structure}{fg=RecommenderBlue}
+\setbeamercolor{palette primary}{bg=RecommenderBlue,fg=white}
+\setbeamercolor{palette secondary}{bg=RecommenderBlue!90!black,fg=white}
+\setbeamercolor{palette tertiary}{bg=RecommenderBlue!80!black,fg=white}
+\setbeamercolor{palette quaternary}{bg=RecommenderBlue!70!black,fg=white}
+\setbeamercolor{frametitle}{bg=RecommenderBlue,fg=white}
+\setbeamercolor{title}{bg=RecommenderBlue,fg=white}
+\setbeamercolor{block title}{bg=RecommenderBlue,fg=white}
+\setbeamercolor{block body}{bg=black!8,fg=black}
+
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{itemize item}[circle]
+\setbeamertemplate{itemize subitem}[triangle]
+\setbeamertemplate{enumerate item}[circle]
+\setbeamertemplate{caption}[numbered]
+\setbeamerfont{caption}{size=\scriptsize}
+\setbeamerfont{footline}{size=\tiny}
+
+% -----------------------------------------------------------------------------
+% Packages
+% -----------------------------------------------------------------------------
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{colortbl}
+\usepackage{ragged2e}
+
+\newcolumntype{Y}{>{\RaggedRight\arraybackslash}X}
+\newcommand{\strong}[1]{\textbf{#1}}
+
+% Custom column types for tight Beamer tables
+\newcolumntype{L}[1]{>{\RaggedRight\arraybackslash\hspace{0pt}}p{#1}}
+\newcolumntype{Z}{>{\RaggedRight\arraybackslash\hspace{0pt}}X}
+
+% Footer customization
+\setbeamertemplate{footline}{%
+  \leavevmode%
+  \hbox{%
+    \begin{beamercolorbox}[wd=.250\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}%
+      \usebeamerfont{author in head/foot}\insertshortauthor
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.448\paperwidth,ht=2.25ex,dp=1ex,center]{title in head/foot}%
+      \usebeamerfont{title in head/foot}\insertshorttitle
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.299\paperwidth,ht=2.25ex,dp=1ex,right]{date in head/foot}%
+      \usebeamerfont{date in head/foot}\insertshortdate{}\hspace*{1.5em}%
+      \insertframenumber{} / \inserttotalframenumber\hspace*{1.2ex}
+    \end{beamercolorbox}%
+  }%
+  \vskip0pt%
+}
+
+% -----------------------------------------------------------------------------
+% Metadata
+% -----------------------------------------------------------------------------
+\title[Bias Propagation in Recommender Loops]{Analyzing Bias Propagation in Recommender Feedback Loops Using Embeddings}
+\author[Group 12]{%
+  Anirudh S Nair \\
+  Navya M J \\
+  Niharika S \\
+  Shravan Nander Pandala \\[1.5ex]
+  Project Guide: Dr. Ajeesh Ramanujan%
+}
+\institute[College of Engineering Trivandrum]{%
+  Department of Computer Science and Engineering\\
+  College of Engineering Trivandrum}
+\date{August 4, 2026}
+
+\begin{document}
+
+% Slide 1: Title
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% Slide 2: Outline
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% Illustrative Example Slide
+% -----------------------------------------------------------------------------
+\begin{frame}{Feedback Loop Bias Example}
+\scriptsize
+
+\textbf{Netflix}
+
+\[
+\text{Watch Stranger Things}
+\]
+
+\vspace{-0.2cm}
+\[
+\Downarrow
+\]
+
+\vspace{-0.2cm}
+\[
+\text{Recommend more Sci-Fi}
+\]
+
+\vspace{-0.2cm}
+\[
+\Downarrow
+\]
+
+\vspace{-0.2cm}
+\[
+\text{User watches Sci-Fi}
+\]
+
+\vspace{-0.2cm}
+\[
+\Downarrow
+\]
+
+\vspace{-0.2cm}
+\[
+\text{Model learns: "Likes Sci-Fi"}
+\]
+
+\vspace{-0.2cm}
+\[
+\Downarrow
+\]
+
+\vspace{-0.2cm}
+\[
+\text{Future recommendations mostly Sci-Fi}
+\]
+
+\vspace{0.15cm}
+
+\textbf{Feedback Loop:}
+Recommendations shape user behavior, which is used to retrain the model, reinforcing the same recommendations and reducing diversity.
+
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% Section 1: Domain of Interest
+% -----------------------------------------------------------------------------
+\section{Domain of Interest}
+\begin{frame}{Domain of Interest}
+  \begin{itemize}
+    \item \strong{Recommender Systems (RSs):} Digital platforms use recommendation systems to discover user preferences and match users to catalog items.
+    
+    \item \strong{Vector Embeddings:} Recommendation engines map users and items into a shared, low-dimensional space as dense vectors.
+    
+    \item \strong{Closed Feedback Loops:} Recommendation outputs shape future user interactions, which become inputs for future model training.
+    
+    \item \strong{Embedding Geometry:} The study focuses on how vector coordinates move and change over repeated training cycles.
+  \end{itemize}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% Section 2: Problem Statement
+% -----------------------------------------------------------------------------
+\section{Problem Statement}
+\begin{frame}{Problem Statement: Feedback Loops and Bias Propagation}
+  \begin{itemize}
+    \item Observational training data has systemic bias and deviates from true user preferences.
+    
+    \item Standard models favor popular items and ignore most items in the catalog.
+    
+    \item Feedback loop bias is dynamic, self-reinforcing, and grows stronger across retraining cycles.
+    
+    \item Users with niche preferences do not receive recommendations matching their real interests.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Problem Statement: Embedding Space Drift}
+  \begin{itemize}
+    \item Embeddings store item attributes and user preference patterns as spatial coordinates.
+    
+    \item Feedback loops cause vector representations to undergo continuous geometric drift.
+    
+    \item Vectors move away from true user preference coordinates toward a biased focal center.
+    
+    \item This geometric drift contracts the embedding space, reducing catalog coverage and recommendation diversity.
+  \end{itemize}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% Section 3: Project Objectives
+% -----------------------------------------------------------------------------
+\section{Project Objectives}
+\begin{frame}{Project Objectives}
+  \begin{block}{Primary Objective}
+    Analyze and mitigate dynamic bias propagation in closed-loop recommender systems by tracking geometric changes in vector embedding space.
+  \end{block}
+  
+  \vspace{0.3cm}
+  
+  \begin{enumerate}
+    \item \strong{Build Simulation Framework:} Construct a closed-loop simulation environment to model multi-generation recommendation cycles.
+    
+    \item \strong{Quantify Vector Contraction:} Calculate the velocity of embedding space contraction to measure diversity loss and popularity concentration.
+    
+    \item \strong{Evaluate Mitigation Methods:} Test alternative recommendation algorithms and bias mitigation techniques to stabilize vector trajectories.
+  \end{enumerate}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% Expected Outcome
+% -----------------------------------------------------------------------------
+\begin{frame}{Expected Outcome}
+\begin{itemize}
+    \item Develop a recommendation model for feedback loop analysis.
+    \item Train and evaluate the model through iterative recommendation cycles.
+    \item Analyze the evolution of embedding representations over time.
+    \item Study the impact of feedback loops on bias and recommendation diversity.
+    \item Provide insights for future bias-aware recommender systems.
+\end{itemize}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% Section 4: Literature Review
+% -----------------------------------------------------------------------------
+\section{Literature Review}
+
+\begin{frame}{Literature Review}
+\scriptsize
+\setlength{\tabcolsep}{1.5pt}
+\renewcommand{\arraystretch}{1.05}
+\begin{tabularx}{\textwidth}{L{1.8cm} Z Z Z}
+\toprule
+\strong{Paper} & \strong{Methodology} & \strong{Key Findings} & \strong{Limitations} \\
+\midrule
+Zoralioglu \& Yalcin (2026) & 10-iteration loop framework on benchmarks. & Loops degrade calibration and long-tail item exposure. & Evaluates lists directly; lacks vector-space metrics. \\
+\midrule
+Liu et al. (2026) & CDSRec model using Markov chains, DAGs, and VAEs. & Separates intrinsic quality from trend bias. & High complexity; no coordinate contraction tracking. \\
+\midrule
+Chen et al. (2023) & Survey of debiasing (IPS, Causal, RL). & Identifies feedback loops as primary bias driver. & Qualitative; lacks empirical vector tracking. \\
+\midrule
+Mansoury et al. (2020) & Offline simulation across UserKNN, BPR, MostPopular. & Loops amplify popularity bias and drop diversity. & Fixed acceptance rules; no latent vector analysis. \\
+\midrule
+Chaney et al. (2018) & Multi-generation agent-based simulations. & Homogenizes users and harms niche preferences. & Relies on synthetic utility; ignores vector drift. \\
+\bottomrule
+\end{tabularx}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% Section 5: Motivation
+% -----------------------------------------------------------------------------
+\section{Motivation}
+\begin{frame}{Motivation}
+  \begin{itemize}
+    \item \strong{Research Gap 1: Static vs Dynamic Bias} -- Existing mitigation strategies treat bias as a static problem, ignoring how feedback loops amplify bias over time.
+    
+    \item \strong{Research Gap 2: Structural Vector Analysis} -- Existing studies do not measure the geometric drift of vector embeddings during retraining loops.
+    
+    \item \strong{Bridging the Gap:}
+      \begin{itemize}
+        \item Define mathematical metrics to track embedding displacement and contraction speed.
+        \item Identify algorithmic choices that prevent latent space collapse.
+        \item Preserve catalog coverage and improve recommendations for users with niche preferences.
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+% Slide: End Slide
+\begin{frame}
+  \centering
+  \LARGE Thank You!
+\end{frame}
+
+\end{document}

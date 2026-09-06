@@ -1,78 +1,71 @@
 # Recommender Bias Propagation
 
-This repository supports a research project on how recommender systems may amplify popularity bias over iterative recommendation cycles. The current implementation establishes a reproducible MovieLens 1M preprocessing pipeline and baseline long-tail inequality measurements for later simulation phases.
+This repository supports a research project on how recommender systems may amplify popularity bias over iterative recommendation cycles. The project includes baseline data preparation, long-tail inequality metrics, and systematic model benchmarking using **Cornac**.
 
 ## Current Scope
 
-Phase 1 prepares the dataset for implicit-feedback recommendation experiments:
-
+### Phase 1: Data Preparation & Baseline Bias Quantification
 - Ingests MovieLens 1M ratings and movie metadata.
 - Converts explicit ratings into positive implicit feedback signals using `rating >= 4`.
 - Orders each user's interactions chronologically to avoid temporal leakage.
 - Maps raw user and item identifiers to dense zero-indexed codes.
 - Builds per-user 80/20 chronological train/test sparse matrices.
-- Quantifies baseline item-popularity inequality using Gini and top-5% concentration metrics.
+- Quantifies baseline item-popularity inequality using Gini (`0.7176`) and top-5% concentration (`37.43%`).
 
-Baseline results from the current notebook:
-
-| Metric | Value |
-| --- | ---: |
-| Users | 6,038 |
-| Tracked items | 3,533 |
-| Training interactions | 457,818 |
-| Test interactions | 117,463 |
-| Baseline Gini coefficient | 0.7176 |
-| Top 5% item concentration | 37.43% |
-
-## Data
-
-The project uses the public MovieLens 1M dataset from GroupLens:
-
-<https://files.grouplens.org/datasets/movielens/ml-1m.zip>
-
-Dataset artifacts are intentionally excluded from version control:
-
-- `ml-1m.zip`
-- `ml-1m/`
-
-Running `phase_1_data_prep.ipynb` from the repository root downloads and extracts the dataset when needed.
-
-Expected extracted files:
-
-- `ml-1m/ratings.dat`
-- `ml-1m/movies.dat`
-- `ml-1m/users.dat`
-- `ml-1m/README`
+### Phase 2: Recommender Model Benchmarking with Cornac
+- Trains and evaluates multiple recommendation algorithms (`MostPop`, `UserKNN`, `ItemKNN`, `BPR`, `WMF`, `VAECF`) using the Cornac framework.
+- Compares algorithms across multiple datasets (**MovieLens 1M** and **FilmTrust**).
+- Evaluates ranking performance (`NDCG@10`, `Recall@10`, `Precision@10`, `MAP@10`) alongside exposure inequality (`Gini@10`).
 
 ## Repository Layout
 
 ```text
 .
-|-- phase_1_data_prep.ipynb      # Data ingestion, preprocessing, sparse matrices, baseline metrics
-|-- docs/
-|   |-- phase1_data_prep.md      # Methodology notes for Phase 1
-|   |-- images/                  # Generated figures and plot exports
-|   |-- tex/                     # Paper / manuscript LaTeX source files
-|   |-- papers/                  # Reference literature and PDFs
-|   `-- ppt/                     # Presentation slides and pitch decks
-|-- requirements.txt             # Python environment snapshot
-`-- README.md
+├── notebooks/                        # Jupyter notebooks for experiment phases
+│   ├── phase_1_data_prep.ipynb       # Phase 1: Data prep & baseline inequality metrics
+│   ├── phase_2_cornac_benchmark.ipynb # Phase 2: Cornac model training & benchmarking
+│   ├── phase_2_mf_overfit.ipynb      # Phase 2: Matrix Factorization overfit analysis
+│   └── phase_3_mf_pmf_bpr.ipynb      # Phase 3: MF, PMF, BPR recommendation feedback loop experiments
+├── docs/                             # Methodology, research assets & experiment documentation
+│   ├── phase1_data_prep.md           # Phase 1 data prep methodology notes
+│   ├── phase2_cornac_models.md       # Phase 2 Cornac benchmark findings
+│   ├── images/                       # Generated figures and plot exports
+│   ├── tex/                          # Paper / manuscript LaTeX source files
+│   ├── papers/                       # Reference literature and PDF papers
+│   └── ppt/                          # Presentation slides and pitch decks
+├── requirements.txt                  # Environment dependencies including Cornac
+└── README.md
 ```
 
-## Reproducibility
+## Reproducibility & Environment Setup
 
-Create a Python environment, install the notebook dependencies, and run Phase 1 from the repository root:
+Always use the Python virtual environment (`.venv`):
 
 ```bash
-python -m venv .venv
+# 1. Create and activate virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 2. Install dependencies
+pip install --upgrade pip
 pip install -r requirements.txt
-pip install scipy matplotlib seaborn notebook
-jupyter notebook phase_1_data_prep.ipynb
+
+# 3. Register Jupyter Kernel
+python -m ipykernel install --user --name=recommender-bias-venv --display-name "Python (.venv)"
+
+# 4. Launch Jupyter Notebook
+jupyter notebook notebooks/
 ```
 
-The notebook uses `pandas`, `numpy`, `scipy`, `matplotlib`, and `seaborn`. It assumes the MovieLens text files use the original `::` delimiter and reads movie metadata with `latin-1` encoding.
+## Documentation & Assets
 
-## Documentation
-
-Detailed notes for the preprocessing decisions, sparse matrix construction, and baseline inequality analysis are in `docs/phase1_data_prep.md`. Research assets, LaTeX paper sources, reference papers, and presentation decks are organized under `docs/tex/`, `docs/papers/`, and `docs/ppt/`.
+- **Phase 1 Notebook**: [notebooks/phase_1_data_prep.ipynb](notebooks/phase_1_data_prep.ipynb)
+- **Phase 1 Documentation**: [docs/phase1_data_prep.md](docs/phase1_data_prep.md)
+- **Phase 2 Benchmarking Notebook**: [notebooks/phase_2_cornac_benchmark.ipynb](notebooks/phase_2_cornac_benchmark.ipynb)
+- **Phase 2 Overfit Notebook**: [notebooks/phase_2_mf_overfit.ipynb](notebooks/phase_2_mf_overfit.ipynb)
+- **Phase 2 Documentation**: [docs/phase2_cornac_models.md](docs/phase2_cornac_models.md)
+- **Phase 3 Notebook**: [notebooks/phase_3_mf_pmf_bpr.ipynb](notebooks/phase_3_mf_pmf_bpr.ipynb)
+- **LaTeX Writeup**: [docs/tex/zeroth.tex](docs/tex/zeroth.tex)
+- **Presentation Deck**: [docs/ppt/Zeroth.pdf](docs/ppt/Zeroth.pdf)
+- **Reference Papers**: [docs/papers/](docs/papers/)
 
