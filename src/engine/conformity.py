@@ -26,7 +26,7 @@ def compute_social_conformity(
         # Sub-linear logarithmic scaling
         numerator = np.log1p(pop_counts[recs].astype(np.float32))
         denominator = np.log1p(float(max_pop))
-        p_conformity = numerator / denominator
+        p_conformity = np.clip(numerator / denominator, 0.0, 1.0)
 
     # Invariant assertions
     assert p_conformity.shape == (n_active, k), f"Conformity shape misaligned: {p_conformity.shape}"
