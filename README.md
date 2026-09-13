@@ -30,13 +30,13 @@ The project combines empirical data preparation, multi-model benchmarking using 
   - **PMF:** Uses a zero-mean Gaussian prior to constrain embedding magnitudes, suppressing extreme norm variance.
 - Visualizes latent geometric structures using PCA and t-SNE projections.
 
-### Phase 4 / System Specification: Closed-Loop Simulator Architecture
-- Establishes a 5-subsystem modular closed-loop simulation architecture (`src/`) specified in [`SPEC.md`](SPEC.md):
-  - **Subsystem 1 (`src/data/`):** Invariant State & Data Buffer — Manages immutable entity indexing, dual-matrix interaction accumulation ($\mathcal{D}_t$), and frozen ground-truth preference anchors ($U^*, V^*$).
-  - **Subsystem 2 (`src/adapters/`):** Architecture-Agnostic Recommender Interface — Provides facade adapters (`BaseRecommenderAdapter`) for recommendation backbones.
-  - **Subsystem 3 (`src/engine/`):** Vectorized User Interaction Engine — Simulates synthetic user browsing and Bernoulli clicks with position decay, relevance matching, and social conformity.
-  - **Subsystem 4 (`src/metrics/`):** Multi-Tier Metric & Diagnostic Engine — Audits catalog exposure inequality, user cohort calibration drift ($D_{\text{KL}}$), ranking utility, and latent space geometry (Procrustes alignment, norm shift ratio, effective rank).
-  - **Subsystem 5 (`src/orchestrator/`):** Multi-Seed Simulation Orchestrator — Executes generational feedback loops ($t=0 \to T$) with multi-seed statistical aggregation.
+### Phase 4 / System Implementation: Closed-Loop Simulator Architecture
+- Fully implemented and verified all 5 core modular closed-loop simulation subsystems (`src/`) specified in [`SPEC.md`](SPEC.md) with **23 unit tests** passing OK:
+  - **Subsystem 1 (`src/data/`):** Invariant State & Data Buffer — Dataset-agnostic loaders (`load_dataset`, `load_movielens_1m`, `load_movielens_genres`), continuous zero-indexing, dual-matrix interaction accumulation ($\mathcal{D}_t$), and buffer merge/deduplication.
+  - **Subsystem 2 (`src/adapters/`):** Architecture-Agnostic Recommender Interface — Abstract facade adapters (`BaseRecommenderAdapter`, `CornacMFAdapter`, `CornacBPRAdapter`, `CornacUserKNNAdapter`, `CornacMostPopAdapter`) with coordinate alignment and deterministic seeding.
+  - **Subsystem 3 (`src/engine/`):** Vectorized User Interaction Engine — Vectorized position decay exposure, temperature-scaled intrinsic relevance, sub-linear logarithmic conformity, and Poisson session budget truncation ($\lambda=3.0$).
+  - **Subsystem 4 (`src/metrics/`):** Multi-Tier Diagnostic Engine — Audits catalog exposure inequality (Gini, Coverage@K, APLT@K), user cohort taste drift ($D_{\text{KL}}$), ranking utility (Precision@K, Recall@K, NDCG@K, Mann-Whitney AUC), and latent space geometry (Procrustes rigid alignment $\det(R^*)=+1$, relative norm shift $R_{\text{norm}}$, effective rank $S_{\text{eff}}$).
+  - **Subsystem 5 (`src/orchestrator/`):** Multi-Seed Simulation Orchestrator — Multi-seed deterministic random state locking, $T$-generation closed-loop simulation execution, memory-safe garbage collection, and aggregated statistical reporting ($\mu, \sigma$).
 
 ---
 
@@ -49,22 +49,26 @@ The project combines empirical data preparation, multi-model benchmarking using 
 │   ├── phase_2_cornac_benchmark.ipynb        # Phase 2: Cornac model training & benchmarking
 │   ├── phase_2_mf_overfit.ipynb              # Phase 2: Matrix Factorization overfit analysis
 │   └── phase_3_mf_pmf_bpr.ipynb              # Phase 3: Latent space dynamics (MF, PMF, BPR)
+├── scripts/                                  # Benchmark & simulation execution scripts
+│   └── run_full_benchmark.py                 # Full capability multi-model benchmark script
 ├── src/                                      # Closed-loop simulator python architecture
 │   ├── adapters/                             # Subsystem 2: Model facade adapters
 │   ├── data/                                 # Subsystem 1: Invariant state & data buffers
 │   ├── engine/                               # Subsystem 3: User interaction engine
 │   ├── metrics/                              # Subsystem 4: Multi-tier diagnostic engine
 │   └── orchestrator/                         # Subsystem 5: Multi-seed simulation runner
-├── docs/                                     # Documentation, specs, research assets & notes
+├── tests/                                    # Automated unit test suite (23 tests)
+│   ├── test_buffer.py                        # Buffer merge & deduplication tests
+│   ├── test_dataset.py                       # Dataset loader & zero-indexing tests
+│   ├── test_adapters.py                      # Recommender facade & embedding alignment tests
+│   ├── test_engine.py                        # User interaction engine & simulator tests
+│   ├── test_metrics.py                       # 4-tier diagnostic metrics tests
+│   └── test_orchestrator.py                  # Multi-seed simulation pipeline tests
+├── docs/                                     # Documentation, specs, research assets & benchmarks
+│   ├── benchmark_results.md                  # Latest comparative benchmark results report
+│   ├── benchmarks/                           # Preserved unique Run ID reports & JSON metrics
 │   ├── project notes/                        # Phase 1 & 2 methodology and theoretical notes
-│   │   ├── README.md                         # Index of project notes
-│   │   ├── phase1_data_prep.md               # Phase 1 data prep documentation
-│   │   ├── phase2_cornac_models.md           # Phase 2 Cornac benchmarking findings
-│   │   ├── recommender_models.md             # Breakdown of algorithm formulations & behavior
-│   │   └── bias_propagation_and_embedding_dynamics.md # Theoretical framework & metrics
 │   ├── phase3/                               # Phase 3 comparative documentation & guide
-│   │   ├── phase3.md                         # Beginner guide & comparative analysis
-│   │   └── p3.md                             # Technical summary of Phase 3 results
 │   ├── images/                               # Generated figures, plots, and visualizations
 │   ├── tex/                                  # LaTeX paper source files (zeroth.tex)
 │   ├── ppt/                                  # Presentation slides (Zeroth.pdf)
@@ -72,13 +76,14 @@ The project combines empirical data preparation, multi-model benchmarking using 
 ├── SPEC.md                                   # System engineering specification for simulator
 ├── SPEC_HELPER.md                            # Theoretical companion & architectural onboarding
 ├── PLAN.md                                   # System engineering ground-of-truth plan
+├── AGENT.md                                  # Quality control & engineering standards
 ├── requirements.txt                          # Environment dependencies
 └── README.md                                 # Project overview (this file)
 ```
 
 ---
 
-## Reproducibility & Environment Setup
+## Reproducibility & Testing
 
 Always use the Python virtual environment (`.venv`):
 
@@ -91,11 +96,11 @@ source .venv/bin/activate  # On Windows PowerShell: .venv\Scripts\Activate.ps1
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# 3. Register Jupyter Kernel
-python -m ipykernel install --user --name=recommender-bias-venv --display-name "Python (.venv)"
+# 3. Run Automated Unit Test Suite (23 tests across 5 subsystems)
+.venv\Scripts\python.exe -m unittest discover tests
 
-# 4. Launch Jupyter Notebook
-jupyter notebook notebooks/
+# 4. Execute Full Closed-Loop Capability Benchmark
+.venv\Scripts\python.exe scripts/run_full_benchmark.py
 ```
 
 ---
@@ -106,6 +111,9 @@ jupyter notebook notebooks/
 - **Simulator Specification**: [`SPEC.md`](SPEC.md)
 - **Architecture & Onboarding Companion**: [`SPEC_HELPER.md`](SPEC_HELPER.md)
 - **System Engineering Plan**: [`PLAN.md`](PLAN.md)
+- **Engineering Standards**: [`AGENT.md`](AGENT.md)
+- **Latest Benchmark Results**: [`docs/benchmark_results.md`](docs/benchmark_results.md)
+- **Preserved Benchmark Runs**: [`docs/benchmarks/`](docs/benchmarks/)
 
 ### Research Phase Notebooks
 - **Phase 1 Data Prep Notebook**: [`notebooks/phase_1_data_prep.ipynb`](notebooks/phase_1_data_prep.ipynb)
@@ -126,3 +134,4 @@ jupyter notebook notebooks/
 - **LaTeX Manuscript**: [`docs/tex/zeroth.tex`](docs/tex/zeroth.tex)
 - **Presentation Deck**: [`docs/ppt/Zeroth.pdf`](docs/ppt/Zeroth.pdf)
 - **Reference Literature**: [`docs/papers/`](docs/papers/)
+

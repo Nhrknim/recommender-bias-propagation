@@ -161,3 +161,56 @@ def load_movielens_1m(
         encoding="latin-1"
     )
 
+def load_movielens_genres(
+    movies_path: str = "ml-1m/movies.dat", 
+    item2code: Optional[Dict[Any, int]] = None
+) -> np.ndarray:
+    """
+    Parses MovieLens-1M genre metadata into a binary 2D array of shape (|I|, C)
+    aligned to global continuous item codes.
+
+    Args:
+        movies_path: Path to ml-1m/movies.dat file.
+        item2code: Dict mapping raw item_id -> continuous item_code.
+
+    Returns:
+        genre_matrix: 2D float32 array of shape (|I|, C) containing genre indicator probabilities.
+    """
+    df_movies = pd.read_csv(
+        movies_path,
+        sep="::",
+        names=["item_id", "title", "genres"],
+        engine="python",
+        encoding="latin-1"
+    )
+
+    all_genres = set()
+    for genre_str in df_movies["genres"]:
+        for g in str(genre_str).split("|"):
+            all_genres.add(g)
+
+    genre_list = sorted(list(all_genres))
+    genre2idx = {g: idx for idx, g in enumerate(genre_list)}
+    n_genres = len(genre_list)
+
+    n_items = len(item2code) if item2code else len(df_movies)
+    genre_matrix = np.zeros((n_items, n_genres), dtype=np.float32)
+
+    for _, row in df_movies.iterrows():
+        raw_id = row["item_id"]
+        if item2code and raw_id not in item2code:
+            continue
+            
+        code = item2code[raw_id] if item2code else raw_id
+        for g in str(row["genres"]).split("|"):
+            if g in genre2idx:
+                genre_matrix[code, genre2idx[g]] = 1.0
+
+    # Normalize rows so each item's genre vector sums to 1.0
+    row_sums = np.sum(genre_matrix, axis=1, keepdims=True)
+    row_sums[row_sums == 0] = 1.0
+    genre_matrix = genre_matrix / row_sums
+
+    return genre_matrix
+
+
