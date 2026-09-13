@@ -3,7 +3,8 @@
 This document details the 7 recommendation algorithms evaluated in **Phase 2**, categorizing their theoretical paradigms, scoring formulations, and specific roles in studying **popularity bias** and **long-tail inequality propagation**.
 
 > [!NOTE]
-> For in-depth theoretical analysis of algorithmic failure modes (Gradient Starvation, Origin Collapse, Periphery Dispersion), geometric tracking metrics (Procrustes Alignment, Drift Velocity), and closed-loop simulation architecture, refer to [**bias_propagation_and_embedding_dynamics.md**](file:///x:/Academics/Main%20Project/recommender-bias-propagation/docs/project%20notes/bias_propagation_and_embedding_dynamics.md).
+> For in-depth theoretical analysis of algorithmic failure modes (Gradient Starvation, Origin Collapse, Periphery Dispersion), geometric tracking metrics (Procrustes Alignment, Drift Velocity), and closed-loop simulation architecture, refer to [**bias_propagation_and_embedding_dynamics.md**](./bias_propagation_and_embedding_dynamics.md).
+
 
 ---
 
