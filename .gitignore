@@ -239,3 +239,7 @@ docs/tex/*.blg
 docs/ppt/~$*.pptx
 docs/ppt/~$*.ppt
 
+# Project Research Plan
+PLAN.md
+
+
