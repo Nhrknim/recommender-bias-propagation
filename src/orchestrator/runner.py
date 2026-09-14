@@ -134,13 +134,12 @@ def run_simulation_pipeline(
             cov = compute_catalog_coverage(recs, n_items)
             aplt = compute_aplt(recs, long_tail_mask)
 
-            # Tier 2 Cohorts & KL Drift
-            current_rec_dist = np.zeros((n_users, n_categories), dtype=np.float32)
-            for u in range(n_users):
-                u_recs = recs[u]
-                cat_sum = np.sum(item_category_matrix[u_recs], axis=0)
-                sum_val = np.sum(cat_sum)
-                current_rec_dist[u] = cat_sum / sum_val if sum_val > 0 else np.ones(n_categories) / n_categories
+            # Tier 2 Cohorts & KL Drift (Vectorized)
+            u_recs_cat = item_category_matrix[recs]  # (n_users, k, n_categories)
+            cat_sum = u_recs_cat.sum(axis=1)          # (n_users, n_categories)
+            sum_val = cat_sum.sum(axis=1, keepdims=True)
+            uniform_dist = np.ones((1, n_categories), dtype=np.float32) / n_categories
+            current_rec_dist = np.where(sum_val > 0, cat_sum / np.maximum(sum_val, 1e-9), uniform_dist)
 
             kl_drifts = compute_kl_divergence_drift(base_user_dist, current_rec_dist)
             mean_kl_drift = float(np.mean(kl_drifts))
@@ -154,10 +153,10 @@ def run_simulation_pipeline(
             rec = compute_recall_at_k(recs, test_csr, k=k)
             ndcg = compute_ndcg_at_k(recs, test_csr, k=k)
 
-            # Construct dummy score matrix for AUC computation
+            # Construct dummy score matrix for AUC computation (Vectorized)
             score_matrix = np.zeros((n_users, n_items), dtype=np.float32)
-            for u in range(n_users):
-                score_matrix[u, recs[u]] = np.linspace(1.0, 0.1, num=k)
+            user_rows = np.arange(n_users)[:, None]
+            score_matrix[user_rows, recs] = np.linspace(1.0, 0.1, num=k)
             auc = compute_vectorized_auc(score_matrix, test_csr)
 
             # Tier 4 Geometry
