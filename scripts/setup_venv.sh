@@ -3,8 +3,8 @@
 # Setup Python Virtual Environment, Activate, and Install Requirements
 #
 # Usage:
-#   source scripts/setup_env.sh        # Sets up, installs, and activates in current shell
-#   bash scripts/setup_env.sh          # Sets up venv and installs dependencies
+#   source scripts/setup_venv.sh       # Sets up, installs, and activates in current shell
+#   bash scripts/setup_venv.sh         # Sets up venv and installs dependencies
 # ==============================================================================
 
 # Check if script is sourced or executed directly

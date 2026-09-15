@@ -87,7 +87,7 @@ Always use the Python virtual environment (`venv`):
 
 ```bash
 # 1. Automated Setup (creates venv, installs requirements.txt, and activates)
-source scripts/setup_env.sh
+source scripts/setup_venv.sh
 
 # 2. Run Automated Unit Test Suite (23 tests across 5 subsystems)
 python -m unittest discover tests
