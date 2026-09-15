@@ -70,6 +70,7 @@ docs/
 * [**Phase 2: Cornac Model Benchmarks**](./notes/phase2_cornac_models.md)
 * [**Phase 3: Representation Geometry**](./notes/phase3_representation_geometry.md)
 * [**Phase 3: Conceptual Guide**](./notes/phase3_beginners_guide.md)
+* [**Phase 4: Latent Manifold & Trajectory Visualization**](./notes/phase4_tsne_visualization.md)
 * [**Recommender Models Reference**](./notes/recommender_models.md)
 * [**Closed-Loop Bias Dynamics Theory**](./notes/bias_propagation_and_embedding_dynamics.md)
 

@@ -29,9 +29,17 @@ This directory contains the theoretical foundations, empirical notes, mathematic
 * [**phase3_beginners_guide.md**](./phase3_beginners_guide.md)
   * Conceptual guide explaining the "Popularity Trap", why algorithms ignore hidden gems, and embedding space dynamics.
 
-### 4. Theoretical Foundations & Closed-Loop Simulation
+### 4. Phase 4: Closed-Loop Simulation & Latent Manifold Visualization
+* [**phase4_tsne_visualization.md**](./phase4_tsne_visualization.md)
+  * Accessible, plain-language walkthrough of the 10-generation closed-loop simulation.
+  * 4-tier benchmark trajectory dynamics ($G$, $D_{\text{KL}}$, $NDCG@10$, $S_{\text{eff}}$).
+  * 2D t-SNE latent space maps showing popularity gravity traps, genre blurring, and manifold density collapse.
+  * Complete image breakdowns and direct links to all generated visual assets.
+
+### 5. Theoretical Foundations & Closed-Loop Mechanics
 * [**bias_propagation_and_embedding_dynamics.md**](./bias_propagation_and_embedding_dynamics.md)
   * Formal distinction between static algorithmic bias vs. dynamic closed-loop bias amplification.
   * 4-step closed-loop serving architecture: Candidate Recommendation $\to$ Vectorized Click Simulation $\to$ Buffer Ingestion $\to$ Cold Retraining.
   * 4-tier diagnostic metrics suite (Macro Exposure, User Group Disparity, Ranking Utility, Manifold Geometry).
   * Rotational invariance, Reflection-Corrected Orthogonal Procrustes alignment, and Effective Rank ($S_{\text{eff}}$).
+

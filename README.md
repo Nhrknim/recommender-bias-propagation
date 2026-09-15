@@ -128,6 +128,7 @@ pip install -r requirements.txt
 - **Phase 2 Model Benchmarks**: [`docs/notes/phase2_cornac_models.md`](docs/notes/phase2_cornac_models.md)
 - **Phase 3 Representation Geometry**: [`docs/notes/phase3_representation_geometry.md`](docs/notes/phase3_representation_geometry.md)
 - **Phase 3 Popularity Trap Guide**: [`docs/notes/phase3_beginners_guide.md`](docs/notes/phase3_beginners_guide.md)
+- **Phase 4 Latent Manifold Visualization**: [`docs/notes/phase4_tsne_visualization.md`](docs/notes/phase4_tsne_visualization.md)
 - **Recommendation Models Breakdown**: [`docs/notes/recommender_models.md`](docs/notes/recommender_models.md)
 - **Bias Propagation & Embedding Dynamics**: [`docs/notes/bias_propagation_and_embedding_dynamics.md`](docs/notes/bias_propagation_and_embedding_dynamics.md)
 - **Visual Assets & Trajectory Figures**: [`docs/images/`](docs/images/)
