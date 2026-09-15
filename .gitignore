@@ -239,5 +239,7 @@ docs/ppt/~$*.ppt
 # Benchmark run outputs and generated reports
 docs/benchmarks/*
 !docs/benchmarks/.gitkeep
+!docs/benchmarks/benchmark_results.md
 .DS_Store
+
 
