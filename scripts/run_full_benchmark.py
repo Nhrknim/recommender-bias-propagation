@@ -45,8 +45,8 @@ def main():
 
     # 2. Experiment configuration
     models_to_test = [
-        ("Matrix Factorization (MF)", CornacMFAdapter, {"dim": 16, "max_iter": 10}),
-        ("Bayesian Personalized Ranking (BPR)", CornacBPRAdapter, {"dim": 16, "max_iter": 10}),
+        ("Matrix Factorization (MF)", CornacMFAdapter, {"dim": 32, "max_iter": 10}),
+        ("Bayesian Personalized Ranking (BPR)", CornacBPRAdapter, {"dim": 32, "max_iter": 10}),
         ("Most Popular Baseline (MostPop)", CornacMostPopAdapter, {})
     ]
 
