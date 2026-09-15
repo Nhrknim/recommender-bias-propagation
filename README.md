@@ -86,19 +86,20 @@ The project combines empirical data preparation, multi-model benchmarking using 
 Always use the Python virtual environment (`.venv`):
 
 ```bash
-# 1. Create and activate virtual environment
-python3 -m venv .venv
-source .venv/bin/activate  # On Windows PowerShell: .venv\Scripts\Activate.ps1
+# Option A: Automated Setup (sets up venv, installs requirements.txt, and activates)
+source scripts/setup_env.sh
 
-# 2. Install dependencies
+# Option B: Manual Setup
+python3 -m venv venv
+source venv/bin/activate  # On Windows PowerShell: .\venv\Scripts\Activate.ps1
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# 3. Run Automated Unit Test Suite (23 tests across 5 subsystems)
-.venv\Scripts\python.exe -m unittest discover tests
+# Run Automated Unit Test Suite (23 tests across 5 subsystems)
+python -m unittest discover tests
 
-# 4. Execute Full Closed-Loop Capability Benchmark
-.venv\Scripts\python.exe scripts/run_full_benchmark.py
+# Execute Full Closed-Loop Capability Benchmark
+python scripts/run_full_benchmark.py
 ```
 
 ---
