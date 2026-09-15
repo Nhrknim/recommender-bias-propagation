@@ -65,9 +65,8 @@ The project combines empirical data preparation, multi-model benchmarking using 
 │   ├── test_metrics.py                       # 4-tier diagnostic metrics tests
 │   └── test_orchestrator.py                  # Multi-seed simulation pipeline tests
 ├── docs/                                     # Documentation, specs, research assets & benchmarks
-│   ├── benchmark_results.md                  # Latest comparative benchmark results report
-│   ├── benchmarks/                           # Preserved unique Run ID reports & JSON metrics
-│   ├── notes/                                # Research notes across Phases 1, 2, and 3
+│   ├── benchmarks/                           # Benchmark outputs (.gitkeep tracked; reports ignored)
+│   ├── notes/                                # Research notes across Phases 1, 2, 3, and 4
 │   ├── images/                               # Structured visual catalog mapped to notebooks
 │   ├── tex/                                  # LaTeX paper source files (zeroth.tex)
 │   ├── ppt/                                  # Presentation slides (Zeroth.pdf)
@@ -111,8 +110,8 @@ pip install -r requirements.txt
 - **Architecture & Onboarding Companion**: [`SPEC_HELPER.md`](SPEC_HELPER.md)
 - **System Engineering Plan**: [`PLAN.md`](PLAN.md)
 - **Engineering Standards**: [`AGENT.md`](AGENT.md)
-- **Latest Benchmark Results**: [`docs/benchmark_results.md`](docs/benchmark_results.md)
-- **Preserved Benchmark Runs**: [`docs/benchmarks/`](docs/benchmarks/)
+- **Latest Benchmark Results**: [`docs/benchmarks/benchmark_results.md`](docs/benchmarks/benchmark_results.md) (Generated locally by `scripts/run_full_benchmark.py`)
+- **Benchmark Run Directory**: [`docs/benchmarks/`](docs/benchmarks/)
 
 ### Research Phase Notebooks
 - **Phase 1 Data Prep Notebook**: [`notebooks/phase_1_data_prep.ipynb`](notebooks/phase_1_data_prep.ipynb)

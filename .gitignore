@@ -236,8 +236,8 @@ docs/tex/*.blg
 docs/ppt/~$*.pptx
 docs/ppt/~$*.ppt
 
-# Project Research Plan
-PLAN.md
-docs/benchmarks/*.md
-docs/benchmarks/*.json
+# Benchmark run outputs and generated reports
+docs/benchmarks/*
+!docs/benchmarks/.gitkeep
 .DS_Store
+
