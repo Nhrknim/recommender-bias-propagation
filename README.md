@@ -83,22 +83,16 @@ The project combines empirical data preparation, multi-model benchmarking using 
 
 ## Reproducibility & Testing
 
-Always use the Python virtual environment (`.venv`):
+Always use the Python virtual environment (`venv`):
 
 ```bash
-# Option A: Automated Setup (sets up venv, installs requirements.txt, and activates)
+# 1. Automated Setup (creates venv, installs requirements.txt, and activates)
 source scripts/setup_env.sh
 
-# Option B: Manual Setup
-python3 -m venv venv
-source venv/bin/activate  # On Windows PowerShell: .\venv\Scripts\Activate.ps1
-pip install --upgrade pip
-pip install -r requirements.txt
-
-# Run Automated Unit Test Suite (23 tests across 5 subsystems)
+# 2. Run Automated Unit Test Suite (23 tests across 5 subsystems)
 python -m unittest discover tests
 
-# Execute Full Closed-Loop Capability Benchmark
+# 3. Execute Full Closed-Loop Capability Benchmark
 python scripts/run_full_benchmark.py
 ```
 
