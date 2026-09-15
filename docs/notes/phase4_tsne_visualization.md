@@ -122,6 +122,27 @@ This is visual proof of **representation collapse**. The algorithm is effectivel
 
 ---
 
+### Visual 5: 50-Generation Dynamic Embedding Drift Animation (GIF)
+🔗 **Direct Asset Link**: [embedding_drift_trajectory.gif](../images/phase_4_tsne_visualization/embedding_drift_trajectory.gif)
+
+![50-Generation Embedding Drift Trajectory Animation](../images/phase_4_tsne_visualization/embedding_drift_trajectory.gif)
+
+#### 1. What You Are Looking At:
+* An animated 50-frame sequence tracking continuous closed-loop feedback across 50 generations ($t=0 \to 49$).
+* **Left Panel**: 2D projection of all 3,533 movies (points colored by log-popularity from deep purple to bright yellow). The red trailing paths and arrows track the top-30 most popular viral blockbusters across time.
+* **Right Top Panel**: Live tracking of **Catalog Exposure Inequality (Gini)** climbing upward as time progresses.
+* **Right Bottom Panel**: Live tracking of **Latent Manifold Effective Rank** decaying frame-by-frame.
+
+#### 2. What is Happening Across Time:
+* **Generations $0 \to 15$**: Initial rapid migration. The top popular movies pull away from their starting clusters and head directly toward central attractor hubs.
+* **Generations $15 \to 35$**: Compounding inequality. Niche long-tail items (purple dots) freeze on the periphery, receiving negligible gradient updates.
+* **Generations $35 \to 49$**: Saturation and collapse. The popular movies consolidate into super-dense attractors, while Effective Rank drops and Gini stabilizes at high inequality.
+
+#### 3. Core Takeaway:
+Seeing the animation play in real time brings the theory to life: **recommendation feedback loops are physical attractors**. You can directly watch the algorithm contract its worldview as it prioritizes short-term clicks over diverse long-term discovery.
+
+---
+
 ## Summary of Key Takeaways
 
 > [!IMPORTANT]
