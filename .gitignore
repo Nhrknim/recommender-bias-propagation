@@ -241,5 +241,6 @@ docs/ppt/~$*.ppt
 
 # Project Research Plan
 PLAN.md
-
-
+docs/benchmarks/*.md
+docs/benchmarks/*.json
+.DS_Store

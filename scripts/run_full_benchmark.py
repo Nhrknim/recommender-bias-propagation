@@ -51,7 +51,7 @@ def main():
     ]
 
     seeds = [42, 123, 456]
-    T = 5
+    T = 10
     K = 10
     alpha = 0.8  # Stronger social conformity weight for active bias dynamics
 
@@ -94,9 +94,12 @@ def main():
     report_lines.append(f"**Dataset:** MovieLens-1M ({n_users:,} users, {n_items:,} items, {genre_matrix.shape[1]} genres)")
     report_lines.append(f"**Configuration:** T={T} generations, K={K}, alpha={alpha}, seeds={seeds}\n")
 
+    table_header = "| Model Architecture | " + " | ".join([f"t={t}" for t in range(T)]) + " |"
+    table_divider = "| :--- | " + " | ".join([":---" for _ in range(T)]) + " |"
+
     report_lines.append("## Tier 1: Macro Catalog Exposure Gini ($G$)\n")
-    report_lines.append("| Model Architecture | t=0 | t=1 | t=2 | t=3 | t=4 |")
-    report_lines.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
+    report_lines.append(table_header)
+    report_lines.append(table_divider)
 
     for model_name in benchmark_summary:
         gini_means = benchmark_summary[model_name]["gini"]["mean"]
@@ -104,8 +107,8 @@ def main():
         report_lines.append(row)
 
     report_lines.append("\n## Tier 2: User Genre Taste Drift ($D_{\\text{KL}}$)\n")
-    report_lines.append("| Model Architecture | t=0 | t=1 | t=2 | t=3 | t=4 |")
-    report_lines.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
+    report_lines.append(table_header)
+    report_lines.append(table_divider)
 
     for model_name in benchmark_summary:
         kl_means = benchmark_summary[model_name]["kl_drift"]["mean"]
@@ -113,8 +116,8 @@ def main():
         report_lines.append(row)
 
     report_lines.append("\n## Tier 3: Recommendation Accuracy (NDCG@10)\n")
-    report_lines.append("| Model Architecture | t=0 | t=1 | t=2 | t=3 | t=4 |")
-    report_lines.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
+    report_lines.append(table_header)
+    report_lines.append(table_divider)
 
     for model_name in benchmark_summary:
         ndcg_means = benchmark_summary[model_name]["ndcg"]["mean"]
@@ -122,8 +125,8 @@ def main():
         report_lines.append(row)
 
     report_lines.append("\n## Tier 4: Latent Manifold Effective Rank ($S_{\\text{eff}}$)\n")
-    report_lines.append("| Model Architecture | t=0 | t=1 | t=2 | t=3 | t=4 |")
-    report_lines.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
+    report_lines.append(table_header)
+    report_lines.append(table_divider)
 
     for model_name in benchmark_summary:
         seff_means = benchmark_summary[model_name]["s_eff"]["mean"]
