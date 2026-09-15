@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.sparse as sp
+from typing import Any
 
 def compute_precision_at_k(recs: np.ndarray, test_matrix: sp.csr_matrix, k: int) -> float:
     """
@@ -97,14 +98,14 @@ def compute_ndcg_at_k(recs: np.ndarray, test_matrix: sp.csr_matrix, k: int) -> f
     return float(np.mean(ndcgs)) if len(ndcgs) > 0 else 0.0
 
 
-def compute_vectorized_auc(score_matrix: np.ndarray, test_matrix: sp.csr_matrix) -> float:
+def compute_vectorized_auc(score_matrix: Any, test_matrix: sp.csr_matrix) -> float:
     """
     Computes exact global Mann-Whitney Pairwise AUC in O(|I| log |I|) time per user.
 
     AUC_u = (RankSum_pos - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg)
 
     Args:
-        score_matrix: Dense 2D array of predicted item scores, shape (|U|, |I|).
+        score_matrix: Dense 2D array or sparse CSR matrix of predicted item scores, shape (|U|, |I|).
         test_matrix: Sparse CSR matrix of ground-truth test interactions, shape (|U|, |I|).
 
     Returns:
@@ -112,6 +113,7 @@ def compute_vectorized_auc(score_matrix: np.ndarray, test_matrix: sp.csr_matrix)
     """
     n_users, n_items = score_matrix.shape
     auc_scores = []
+    is_sparse = sp.issparse(score_matrix)
 
     for u in range(n_users):
         pos_items = test_matrix[u].indices
@@ -120,7 +122,7 @@ def compute_vectorized_auc(score_matrix: np.ndarray, test_matrix: sp.csr_matrix)
             continue
 
         n_neg = n_items - n_pos
-        scores = score_matrix[u]
+        scores = score_matrix[u].toarray().ravel() if is_sparse else score_matrix[u]
 
         # Vectorized rank sorting (1-indexed ranks)
         ranks = np.argsort(np.argsort(scores)) + 1

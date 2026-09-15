@@ -67,9 +67,8 @@ The project combines empirical data preparation, multi-model benchmarking using 
 ├── docs/                                     # Documentation, specs, research assets & benchmarks
 │   ├── benchmark_results.md                  # Latest comparative benchmark results report
 │   ├── benchmarks/                           # Preserved unique Run ID reports & JSON metrics
-│   ├── project notes/                        # Phase 1 & 2 methodology and theoretical notes
-│   ├── phase3/                               # Phase 3 comparative documentation & guide
-│   ├── images/                               # Generated figures, plots, and visualizations
+│   ├── notes/                                # Research notes across Phases 1, 2, and 3
+│   ├── images/                               # Structured visual catalog mapped to notebooks
 │   ├── tex/                                  # LaTeX paper source files (zeroth.tex)
 │   ├── ppt/                                  # Presentation slides (Zeroth.pdf)
 │   └── papers/                               # Literature references and PDF papers
@@ -120,15 +119,18 @@ pip install -r requirements.txt
 - **Phase 2 Benchmarking Notebook**: [`notebooks/phase_2_cornac_benchmark.ipynb`](notebooks/phase_2_cornac_benchmark.ipynb)
 - **Phase 2 Overfit Notebook**: [`notebooks/phase_2_mf_overfit.ipynb`](notebooks/phase_2_mf_overfit.ipynb)
 - **Phase 3 Latent Dynamics Notebook**: [`notebooks/phase_3_mf_pmf_bpr.ipynb`](notebooks/phase_3_mf_pmf_bpr.ipynb)
+- **Phase 4 t-SNE Manifold Visualization**: [`notebooks/phase_4_tsne_visualization.ipynb`](notebooks/phase_4_tsne_visualization.ipynb)
 
-### Technical Documentation & Project Notes
-- **Project Notes Index**: [`docs/project notes/README.md`](docs/project%20notes/README.md)
-- **Phase 1 Data Preparation**: [`docs/project notes/phase1_data_prep.md`](docs/project%20notes/phase1_data_prep.md)
-- **Phase 2 Model Benchmarks**: [`docs/project notes/phase2_cornac_models.md`](docs/project%20notes/phase2_cornac_models.md)
-- **Recommendation Models Breakdown**: [`docs/project notes/recommender_models.md`](docs/project%20notes/recommender_models.md)
-- **Bias Propagation & Embedding Dynamics**: [`docs/project notes/bias_propagation_and_embedding_dynamics.md`](docs/project%20notes/bias_propagation_and_embedding_dynamics.md)
-- **Phase 3 Guide & Analysis**: [`docs/phase3/phase3.md`](docs/phase3/phase3.md)
-- **Phase 3 Technical Summary**: [`docs/phase3/p3.md`](docs/phase3/p3.md)
+### Technical Documentation & Research Notes
+- **Documentation Hub**: [`docs/README.md`](docs/README.md)
+- **Research Notes Index**: [`docs/notes/README.md`](docs/notes/README.md)
+- **Phase 1 Data Preparation**: [`docs/notes/phase1_data_prep.md`](docs/notes/phase1_data_prep.md)
+- **Phase 2 Model Benchmarks**: [`docs/notes/phase2_cornac_models.md`](docs/notes/phase2_cornac_models.md)
+- **Phase 3 Representation Geometry**: [`docs/notes/phase3_representation_geometry.md`](docs/notes/phase3_representation_geometry.md)
+- **Phase 3 Popularity Trap Guide**: [`docs/notes/phase3_beginners_guide.md`](docs/notes/phase3_beginners_guide.md)
+- **Recommendation Models Breakdown**: [`docs/notes/recommender_models.md`](docs/notes/recommender_models.md)
+- **Bias Propagation & Embedding Dynamics**: [`docs/notes/bias_propagation_and_embedding_dynamics.md`](docs/notes/bias_propagation_and_embedding_dynamics.md)
+- **Visual Assets & Trajectory Figures**: [`docs/images/`](docs/images/)
 
 ### Publications & Manuscripts
 - **LaTeX Manuscript**: [`docs/tex/zeroth.tex`](docs/tex/zeroth.tex)

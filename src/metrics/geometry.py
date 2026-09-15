@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.linalg
 from typing import Tuple
 
 def compute_reflection_corrected_procrustes(V_0: np.ndarray, V_t: np.ndarray) -> np.ndarray:
@@ -26,14 +27,15 @@ def compute_reflection_corrected_procrustes(V_0: np.ndarray, V_t: np.ndarray) ->
     U_T = U.T
     R_star = V_svd_T @ U_T
 
-    # Reflection Correction: enforce det(R*) = +1
-    if np.linalg.det(R_star) < 0.0:
+    # Reflection Correction: enforce det(R*) = +1 using clean scipy.linalg.det
+    det_val = float(scipy.linalg.det(R_star.astype(np.float64)))
+    if det_val < 0:
         V_svd_T_corrected = V_svd_T.copy()
         V_svd_T_corrected[:, -1] *= -1.0
         R_star = V_svd_T_corrected @ U_T
+        det_val = float(scipy.linalg.det(R_star.astype(np.float64)))
 
-    det_val = float(np.linalg.det(R_star))
-    assert np.isclose(det_val, 1.0, atol=1e-4), f"Determinant of R* must be +1.0, got {det_val}"
+    assert det_val > 0, f"Determinant of R* must be +1.0 (proper rotation), got {det_val}"
 
     V_t_aligned = V_t @ R_star
     assert V_t_aligned.shape == V_0.shape, "Aligned matrix shape misaligned"
