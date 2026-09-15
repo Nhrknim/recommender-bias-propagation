@@ -122,6 +122,16 @@ This is visual proof of **representation collapse**. The algorithm is effectivel
 
 ---
 
+## Summary of Key Takeaways
+
+> [!IMPORTANT]
+> When recommendation algorithms feed on their own outputs over multiple generations without debiasing safeguards:
+> 1. **Hits become gravity traps**: Popular movies act like black holes with massive pull, dragging the algorithm's coordinate space inward and clustering together regardless of genre.
+> 2. **Niche items get starved**: Obscure, long-tail movies are pushed to the outer rim, receive zero recommendations, and freeze in place.
+> 3. **The algorithm "dumbs itself down"**: The system's worldview physically shrinks—collapsing from a rich, diverse space into a few hyper-dense echo chambers of safe viral hits.
+
+---
+
 ## Practical Takeaways for Recommender Systems
 
 1. **Self-Fulfilling Prophecy**: Recommendation systems don't just predict user taste; they actively manufacture it. Once a hit gets an early lead, feedback loops ensure it stays on top.
@@ -130,3 +140,4 @@ This is visual proof of **representation collapse**. The algorithm is effectivel
    * **Exploration Bonuses**: Regularly injecting high-quality niche items into recommendations.
    * **Popularity Penalties (Debiasing)**: Discounting clicks on blockbusters so niche items have a fair chance to compete.
    * **Coverage Invariants**: Monitoring catalog Gini and effective rank as primary health metrics, not just click-through rate.
+
