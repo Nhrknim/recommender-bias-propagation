@@ -90,6 +90,8 @@ def set_global_seed(seed: int) -> None:
 * **Do Not Redefine Formulas:** Never "simplify" the mathematical formulations established in `PLAN.md` (e.g., changing sub-linear conformity back to linear ratios, or omitting $\det(R^*)$ checking in Procrustes).
 * **Test-Driven Delivery:** Every new subsystem file must be accompanied by an isolated test in `tests/` verifying shapes, deterministic outputs, and numerical stability edge-cases (e.g., zero vectors, empty clicks).
 * **Fail Fast Over Silent Recovery:** If dimension mismatches, index gaps, or non-invertible matrices occur, raise explicit exceptions (`ValueError`, `FloatingPointError`) rather than falling back to imputed default values that could silently corrupt longitudinal runs.
+* **No Git Push Without Explicit Request:** NEVER execute `git push` or push branches/commits to GitHub or any remote repository unless the user explicitly asks to push in their prompt (e.g., "push to gh", "push to remote"). Local commits (`git commit`) may be created when helpful, but pushing to remote repositories is strictly prohibited without explicit user instruction.
+
 
 ---
 

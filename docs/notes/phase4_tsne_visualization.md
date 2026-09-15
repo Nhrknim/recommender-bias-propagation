@@ -25,8 +25,9 @@ If left unchecked, the algorithm begins to "eat its own tail." It keeps recommen
 * **User Behavior**: In each round, users receive a list of 10 recommendations. They choose what to click using a mix of their authentic taste ($20\%$) and natural conformity to popular titles ($80\%$).
 * **The Contenders**:
   1. **Most Popular (MostPop)**: A baseline that simply recommends the biggest blockbusters to everyone.
-  2. **Matrix Factorization (MF)**: Standard collaborative filtering that maps users and items to hidden preference vectors.
-  3. **Bayesian Personalized Ranking (BPR)**: A popular ranking model designed to figure out which items a user prefers over others.
+  2. **Matrix Factorization (MF)**: Pointwise collaborative filtering optimizing squared rating prediction error.
+  3. **Bayesian Personalized Ranking (BPR)**: A pairwise ranking model optimizing the relative preference order between clicked and unclicked items.
+  4. **Probabilistic Matrix Factorization (PMF)**: A generative model placing Gaussian priors on user and item latent representations.
 
 ---
 
@@ -62,9 +63,12 @@ If left unchecked, the algorithm begins to "eat its own tail." It keeps recommen
 ---
 
 ### Visual 2: The Popularity Gravity Trap
-🔗 **Direct Asset Link**: [tsne_popularity_drift.png](../images/phase_4_tsne_visualization/tsne_popularity_drift.png)
+* **Assets by Model**:
+  * **BPR**: [docs/images/phase_4_tsne_visualization/bpr/tsne_popularity_drift.png](../images/phase_4_tsne_visualization/bpr/tsne_popularity_drift.png)
+  * **MF**: [docs/images/phase_4_tsne_visualization/mf/tsne_popularity_drift.png](../images/phase_4_tsne_visualization/mf/tsne_popularity_drift.png)
+  * **PMF**: [docs/images/phase_4_tsne_visualization/pmf/tsne_popularity_drift.png](../images/phase_4_tsne_visualization/pmf/tsne_popularity_drift.png)
 
-![t-SNE Popularity Drift](../images/phase_4_tsne_visualization/tsne_popularity_drift.png)
+![t-SNE Popularity Drift (BPR)](../images/phase_4_tsne_visualization/bpr/tsne_popularity_drift.png)
 
 #### 1. What You Are Looking At:
 * A 2D map of all 3,533 movies generated using joint t-SNE (so both maps share the exact same coordinate system).
@@ -85,9 +89,12 @@ Popular movies act like **black holes with gravitational pull**. Because they re
 ---
 
 ### Visual 3: Blurring Movie Genres
-🔗 **Direct Asset Link**: [tsne_genre_clusters.png](../images/phase_4_tsne_visualization/tsne_genre_clusters.png)
+* **Assets by Model**:
+  * **BPR**: [docs/images/phase_4_tsne_visualization/bpr/tsne_genre_clusters.png](../images/phase_4_tsne_visualization/bpr/tsne_genre_clusters.png)
+  * **MF**: [docs/images/phase_4_tsne_visualization/mf/tsne_genre_clusters.png](../images/phase_4_tsne_visualization/mf/tsne_genre_clusters.png)
+  * **PMF**: [docs/images/phase_4_tsne_visualization/pmf/tsne_genre_clusters.png](../images/phase_4_tsne_visualization/pmf/tsne_genre_clusters.png)
 
-![Movie Genre Clusters](../images/phase_4_tsne_visualization/tsne_genre_clusters.png)
+![Movie Genre Clusters (BPR)](../images/phase_4_tsne_visualization/bpr/tsne_genre_clusters.png)
 
 #### 1. What You Are Looking At:
 * The same 2D map of movies, but now colored by their primary movie genre: Action (blue), Comedy (orange), Drama (green), Thriller (red), Sci-Fi (purple), Romance (brown), Adventure (pink), and Other (gray).
@@ -104,9 +111,12 @@ Popular movies act like **black holes with gravitational pull**. Because they re
 ---
 
 ### Visual 4: Latent Space Density Compression (KDE)
-🔗 **Direct Asset Link**: [tsne_manifold_density.png](../images/phase_4_tsne_visualization/tsne_manifold_density.png)
+* **Assets by Model**:
+  * **BPR**: [docs/images/phase_4_tsne_visualization/bpr/tsne_manifold_density.png](../images/phase_4_tsne_visualization/bpr/tsne_manifold_density.png)
+  * **MF**: [docs/images/phase_4_tsne_visualization/mf/tsne_manifold_density.png](../images/phase_4_tsne_visualization/mf/tsne_manifold_density.png)
+  * **PMF**: [docs/images/phase_4_tsne_visualization/pmf/tsne_manifold_density.png](../images/phase_4_tsne_visualization/pmf/tsne_manifold_density.png)
 
-![Latent Manifold Density Compression](../images/phase_4_tsne_visualization/tsne_manifold_density.png)
+![Latent Manifold Density Compression (BPR)](../images/phase_4_tsne_visualization/bpr/tsne_manifold_density.png)
 
 #### 1. What You Are Looking At:
 * A contour density map (Kernel Density Estimation) showing where movies are concentrated in the algorithm's mathematical mind.
@@ -123,9 +133,12 @@ This is visual proof of **representation collapse**. The algorithm is effectivel
 ---
 
 ### Visual 5: 50-Generation Dynamic Embedding Drift Animation (GIF)
-🔗 **Direct Asset Link**: [embedding_drift_trajectory.gif](../images/phase_4_tsne_visualization/embedding_drift_trajectory.gif)
+* **Animations by Model**:
+  * **BPR Animation**: [docs/images/phase_4_tsne_visualization/bpr/embedding_drift_trajectory.gif](../images/phase_4_tsne_visualization/bpr/embedding_drift_trajectory.gif)
+  * **MF Animation**: [docs/images/phase_4_tsne_visualization/mf/embedding_drift_trajectory.gif](../images/phase_4_tsne_visualization/mf/embedding_drift_trajectory.gif)
+  * **PMF Animation**: [docs/images/phase_4_tsne_visualization/pmf/embedding_drift_trajectory.gif](../images/phase_4_tsne_visualization/pmf/embedding_drift_trajectory.gif)
 
-![50-Generation Embedding Drift Trajectory Animation](../images/phase_4_tsne_visualization/embedding_drift_trajectory.gif)
+![50-Generation Embedding Drift Trajectory (BPR)](../images/phase_4_tsne_visualization/bpr/embedding_drift_trajectory.gif)
 
 #### 1. What You Are Looking At:
 * An animated 50-frame sequence tracking continuous closed-loop feedback across 50 generations ($t=0 \to 49$).
@@ -140,6 +153,17 @@ This is visual proof of **representation collapse**. The algorithm is effectivel
 
 #### 3. Core Takeaway:
 Seeing the animation play in real time brings the theory to life: **recommendation feedback loops are physical attractors**. You can directly watch the algorithm contract its worldview as it prioritizes short-term clicks over diverse long-term discovery.
+
+---
+
+### Model Architecture Comparison: How MF, PMF, and BPR React Differently
+
+| Model | Loss Formulation | Geometric Drift Signature | Physical Behavior in Plain English |
+| :--- | :--- | :--- | :--- |
+| **BPR** (*Bayesian Personalized Ranking*) | Pairwise ranking: $\ln \sigma(\hat{x}_{u,i} - \hat{x}_{u,j})$ | Strong genre boundary erasure & tight cluster merging | Because it only cares whether item $i$ ranks above item $j$, popular items that get co-clicked across diverse users rapidly overpower niche items. Movie genres bleed together into generic "blockbuster" clumps. |
+| **MF** (*Pointwise Matrix Factorization*) | Pointwise MSE: $(r_{u,i} - \mathbf{u}_u^\top \mathbf{v}_i)^2$ | Direct inward density compression toward interaction center | Minimizes prediction error point-by-point. Items with thousands of clicks generate huge gradients that dominate the loss function, aggressively pulling popular factors toward high-activity user centers while tail items receive almost no gradient force. |
+| **PMF** (*Probabilistic Matrix Factorization*) | Gaussian priors: $\mathcal{N}(0, \sigma_U^2 I), \mathcal{N}(0, \sigma_V^2 I)$ | Two-tier core-periphery segregation (Prior Anchor effect) | The Gaussian prior acts like a rubber band pulling unobserved movies toward the origin $(0, 0)$. Popular items receive enough click evidence to break free from the rubber band, while niche long-tail items stay anchored near the center. This creates a stark division between "orbiting viral hits" and "frozen background items". |
+
 
 ---
 
