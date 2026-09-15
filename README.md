@@ -65,11 +65,9 @@ The project combines empirical data preparation, multi-model benchmarking using 
 │   ├── test_metrics.py                       # 4-tier diagnostic metrics tests
 │   └── test_orchestrator.py                  # Multi-seed simulation pipeline tests
 ├── docs/                                     # Documentation, specs, research assets & benchmarks
-│   ├── benchmark_results.md                  # Latest comparative benchmark results report
-│   ├── benchmarks/                           # Preserved unique Run ID reports & JSON metrics
-│   ├── project notes/                        # Phase 1 & 2 methodology and theoretical notes
-│   ├── phase3/                               # Phase 3 comparative documentation & guide
-│   ├── images/                               # Generated figures, plots, and visualizations
+│   ├── benchmarks/                           # Benchmark outputs (.gitkeep tracked; reports ignored)
+│   ├── notes/                                # Research notes across Phases 1, 2, 3, and 4
+│   ├── images/                               # Structured visual catalog mapped to notebooks
 │   ├── tex/                                  # LaTeX paper source files (zeroth.tex)
 │   ├── ppt/                                  # Presentation slides (Zeroth.pdf)
 │   └── papers/                               # Literature references and PDF papers
@@ -85,22 +83,17 @@ The project combines empirical data preparation, multi-model benchmarking using 
 
 ## Reproducibility & Testing
 
-Always use the Python virtual environment (`.venv`):
+Always use the Python virtual environment (`venv`):
 
 ```bash
-# 1. Create and activate virtual environment
-python3 -m venv .venv
-source .venv/bin/activate  # On Windows PowerShell: .venv\Scripts\Activate.ps1
+# 1. Automated Setup (creates venv, installs requirements.txt, and activates)
+source scripts/setup_venv.sh
 
-# 2. Install dependencies
-pip install --upgrade pip
-pip install -r requirements.txt
+# 2. Run Automated Unit Test Suite (23 tests across 5 subsystems)
+python -m unittest discover tests
 
-# 3. Run Automated Unit Test Suite (23 tests across 5 subsystems)
-.venv\Scripts\python.exe -m unittest discover tests
-
-# 4. Execute Full Closed-Loop Capability Benchmark
-.venv\Scripts\python.exe scripts/run_full_benchmark.py
+# 3. Execute Full Closed-Loop Capability Benchmark
+python scripts/run_full_benchmark.py
 ```
 
 ---
@@ -112,23 +105,27 @@ pip install -r requirements.txt
 - **Architecture & Onboarding Companion**: [`SPEC_HELPER.md`](SPEC_HELPER.md)
 - **System Engineering Plan**: [`PLAN.md`](PLAN.md)
 - **Engineering Standards**: [`AGENT.md`](AGENT.md)
-- **Latest Benchmark Results**: [`docs/benchmark_results.md`](docs/benchmark_results.md)
-- **Preserved Benchmark Runs**: [`docs/benchmarks/`](docs/benchmarks/)
+- **Latest Benchmark Results**: [`docs/benchmarks/benchmark_results.md`](docs/benchmarks/benchmark_results.md) (Generated locally by `scripts/run_full_benchmark.py`)
+- **Benchmark Run Directory**: [`docs/benchmarks/`](docs/benchmarks/)
 
 ### Research Phase Notebooks
 - **Phase 1 Data Prep Notebook**: [`notebooks/phase_1_data_prep.ipynb`](notebooks/phase_1_data_prep.ipynb)
 - **Phase 2 Benchmarking Notebook**: [`notebooks/phase_2_cornac_benchmark.ipynb`](notebooks/phase_2_cornac_benchmark.ipynb)
 - **Phase 2 Overfit Notebook**: [`notebooks/phase_2_mf_overfit.ipynb`](notebooks/phase_2_mf_overfit.ipynb)
 - **Phase 3 Latent Dynamics Notebook**: [`notebooks/phase_3_mf_pmf_bpr.ipynb`](notebooks/phase_3_mf_pmf_bpr.ipynb)
+- **Phase 4 t-SNE Manifold Visualization**: [`notebooks/phase_4_tsne_visualization.ipynb`](notebooks/phase_4_tsne_visualization.ipynb)
 
-### Technical Documentation & Project Notes
-- **Project Notes Index**: [`docs/project notes/README.md`](docs/project%20notes/README.md)
-- **Phase 1 Data Preparation**: [`docs/project notes/phase1_data_prep.md`](docs/project%20notes/phase1_data_prep.md)
-- **Phase 2 Model Benchmarks**: [`docs/project notes/phase2_cornac_models.md`](docs/project%20notes/phase2_cornac_models.md)
-- **Recommendation Models Breakdown**: [`docs/project notes/recommender_models.md`](docs/project%20notes/recommender_models.md)
-- **Bias Propagation & Embedding Dynamics**: [`docs/project notes/bias_propagation_and_embedding_dynamics.md`](docs/project%20notes/bias_propagation_and_embedding_dynamics.md)
-- **Phase 3 Guide & Analysis**: [`docs/phase3/phase3.md`](docs/phase3/phase3.md)
-- **Phase 3 Technical Summary**: [`docs/phase3/p3.md`](docs/phase3/p3.md)
+### Technical Documentation & Research Notes
+- **Documentation Hub**: [`docs/README.md`](docs/README.md)
+- **Research Notes Index**: [`docs/notes/README.md`](docs/notes/README.md)
+- **Phase 1 Data Preparation**: [`docs/notes/phase1_data_prep.md`](docs/notes/phase1_data_prep.md)
+- **Phase 2 Model Benchmarks**: [`docs/notes/phase2_cornac_models.md`](docs/notes/phase2_cornac_models.md)
+- **Phase 3 Representation Geometry**: [`docs/notes/phase3_representation_geometry.md`](docs/notes/phase3_representation_geometry.md)
+- **Phase 3 Popularity Trap Guide**: [`docs/notes/phase3_beginners_guide.md`](docs/notes/phase3_beginners_guide.md)
+- **Phase 4 Latent Manifold Visualization**: [`docs/notes/phase4_tsne_visualization.md`](docs/notes/phase4_tsne_visualization.md)
+- **Recommendation Models Breakdown**: [`docs/notes/recommender_models.md`](docs/notes/recommender_models.md)
+- **Bias Propagation & Embedding Dynamics**: [`docs/notes/bias_propagation_and_embedding_dynamics.md`](docs/notes/bias_propagation_and_embedding_dynamics.md)
+- **Visual Assets & Trajectory Figures**: [`docs/images/`](docs/images/)
 
 ### Publications & Manuscripts
 - **LaTeX Manuscript**: [`docs/tex/zeroth.tex`](docs/tex/zeroth.tex)

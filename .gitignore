@@ -219,10 +219,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Project data artifacts
-# The notebook downloads and extracts MovieLens 1M from the public GroupLens URL.
-ml-1m.zip
-ml-1m/
+logs/
 
 # Documentation & LaTeX build artifacts
 docs/tex/*.aux
@@ -239,8 +236,10 @@ docs/tex/*.blg
 docs/ppt/~$*.pptx
 docs/ppt/~$*.ppt
 
-# Project Research Plan
-PLAN.md
-docs/benchmarks/*.md
-docs/benchmarks/*.json
+# Benchmark run outputs and generated reports
+docs/benchmarks/*
+!docs/benchmarks/.gitkeep
+!docs/benchmarks/benchmark_results.md
 .DS_Store
+
+

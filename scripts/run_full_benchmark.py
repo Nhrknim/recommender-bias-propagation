@@ -141,7 +141,8 @@ def main():
     
     unique_md = f"docs/benchmarks/{run_id}.md"
     unique_json = f"docs/benchmarks/{run_id}.json"
-    latest_md = "docs/benchmark_results.md"
+    latest_md = "docs/benchmarks/benchmark_results.md"
+
 
     with open(unique_md, "w", encoding="utf-8") as f:
         f.write(report_content)
