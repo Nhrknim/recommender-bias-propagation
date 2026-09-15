@@ -45,8 +45,16 @@ This directory centralizes all visual assets, generated plots, and diagnostic fi
 
 ### 4. Phase 4: Closed-Loop Simulation & t-SNE ([`phase_4_tsne_visualization/`](./phase_4_tsne_visualization/))
 * **Notebook**: [`notebooks/phase_4_tsne_visualization.ipynb`](../../notebooks/phase_4_tsne_visualization.ipynb)
-* **Visuals**:
-  * `benchmark_trajectories.png`: 4-tier benchmark metric trajectories ($G$, $D_{\text{KL}}$, $NDCG@10$, $S_{\text{eff}}$) across 10 generations with $\pm 1\sigma$ standard error bands.
-  * `tsne_popularity_drift.png`: Joint 2D t-SNE manifold colored by log-popularity, with red displacement arrows tracking high-exposure attractors.
+* **Comparative Cross-Model Dashboard**:
+  * `benchmark_trajectories.png`: 4-tier benchmark metric trajectories ($G$, $D_{\text{KL}}$, $NDCG@10$, $S_{\text{eff}}$) across 10 generations with $\pm 1\sigma$ standard error bands across MF, BPR, and MostPop.
+* **Model-Specific Subdirectories**:
+  * [`phase_4_tsne_visualization/bpr/`](./phase_4_tsne_visualization/bpr/): Bayesian Personalized Ranking outputs.
+  * [`phase_4_tsne_visualization/mf/`](./phase_4_tsne_visualization/mf/): Matrix Factorization outputs.
+  * [`phase_4_tsne_visualization/pmf/`](./phase_4_tsne_visualization/pmf/): Probabilistic Matrix Factorization outputs.
+* **Standard Assets within Each Model Subfolder**:
+  * `tsne_popularity_drift.png`: Joint 2D t-SNE manifold colored by log-popularity, with red displacement arrows tracking high-exposure attractors ($t=0$ vs $t=9$).
   * `tsne_genre_clusters.png`: Side-by-side ($t=0$ vs $t=9$) movie genre spatial separation and homogenization.
   * `tsne_manifold_density.png`: 2D Kernel Density Estimation (KDE) comparing initial factor dispersion to final latent collapse.
+  * `embedding_drift_trajectory.gif`: 50-generation animated GIF showing continuous item embedding drift alongside live Catalog Gini and Effective Rank metrics.
+
+

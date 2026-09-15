@@ -57,9 +57,8 @@ docs/
 ### 🖼️ Visual Assets & Publication Figures
 * [**Visual Assets Catalog & Notebook Mapping**](./images/README.md): Comprehensive image-to-notebook mapping.
 * [**Phase 4: Benchmark Trajectory Dashboard**](./images/phase_4_tsne_visualization/benchmark_trajectories.png): 4-panel trajectory plots ($G$, $D_{\text{KL}}$, $NDCG@10$, $S_{\text{eff}}$).
-* [**Phase 4: t-SNE Popularity Drift**](./images/phase_4_tsne_visualization/tsne_popularity_drift.png): 2D manifold shift with displacement arrows tracing high-exposure items.
-* [**Phase 4: t-SNE Genre Clusters**](./images/phase_4_tsne_visualization/tsne_genre_clusters.png): Movie genre spatial separation before and after feedback loops.
-* [**Phase 4: t-SNE Manifold Density (KDE)**](./images/phase_4_tsne_visualization/tsne_manifold_density.png): Visual confirmation of latent representation collapse.
+* [**Phase 4: Model Subfolders (BPR, MF, PMF)**](./images/phase_4_tsne_visualization/): Subfolders organized by model architecture containing 2D t-SNE drift, genre clusters, KDE densities, and 50-generation animated GIFs.
+
 * [**Phase 2: NDCG vs. Gini Frontier**](./images/phase_2_cornac_benchmark/phase2_accuracy_vs_gini.png): Accuracy vs. popularity bias trade-off.
 * [**Phase 1: Item Popularity Distribution**](./images/phase_1_data_prep/baseline_item_popularity_distribution.png): MovieLens-1M interaction long-tail skew.
 

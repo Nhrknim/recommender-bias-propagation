@@ -24,10 +24,15 @@ def extract_aligned_embeddings(
         U_global: User factor array of shape (|U|, d) aligned to global indices.
         V_global: Item factor array of shape (|I|, d) aligned to global indices.
     """
-    if not hasattr(model_cornac, "u_factors") or not hasattr(model_cornac, "i_factors"):
-        return None, None
+    u_factors = getattr(model_cornac, "u_factors", None)
+    if u_factors is None:
+        u_factors = getattr(model_cornac, "U", None)
 
-    if model_cornac.u_factors is None or model_cornac.i_factors is None:
+    i_factors = getattr(model_cornac, "i_factors", None)
+    if i_factors is None:
+        i_factors = getattr(model_cornac, "V", None)
+
+    if u_factors is None or i_factors is None:
         return None, None
 
     U_global = np.zeros((n_users, dim), dtype=np.float32)
@@ -38,11 +43,11 @@ def extract_aligned_embeddings(
 
     for global_u, internal_u in uid_map.items():
         if int(global_u) < n_users:
-            U_global[int(global_u)] = model_cornac.u_factors[internal_u]
+            U_global[int(global_u)] = u_factors[internal_u]
 
     for global_i, internal_i in iid_map.items():
         if int(global_i) < n_items:
-            V_global[int(global_i)] = model_cornac.i_factors[internal_i]
+            V_global[int(global_i)] = i_factors[internal_i]
 
     # Invariant assertions for shape and numerical stability
     assert U_global.shape == (n_users, dim), f"U_global shape misaligned: {U_global.shape}"
@@ -143,10 +148,8 @@ class CornacAdapterBase(BaseRecommenderAdapter):
         k_arg = min(k, self.n_items)
         
         # 1. Fast Batch Scoring Matrix Construction (N_active x N_items)
-        if hasattr(self.model, "u_factors") and hasattr(self.model, "i_factors") and \
-           self.model.u_factors is not None and self.model.i_factors is not None:
-            
-            U_g, V_g = self.get_embeddings()
+        U_g, V_g = self.get_embeddings()
+        if U_g is not None and V_g is not None:
             score_matrix = U_g[user_indices] @ V_g.T
         else:
             score_matrix = np.zeros((n_active, self.n_items), dtype=np.float32)
@@ -250,6 +253,20 @@ class CornacBPRAdapter(CornacAdapterBase):
             learning_rate=learning_rate, 
             **kwargs
         )
+
+
+class CornacPMFAdapter(CornacAdapterBase):
+    """Cornac Probabilistic Matrix Factorization (PMF) Recommender Adapter."""
+    def __init__(self, dim: int = 32, max_iter: int = 20, learning_rate: float = 0.001, **kwargs):
+        super().__init__(
+            model_cls=cornac.models.PMF, 
+            dim=dim, 
+            k=dim, 
+            max_iter=max_iter, 
+            learning_rate=learning_rate, 
+            **kwargs
+        )
+
 
 
 class CornacUserKNNAdapter(CornacAdapterBase):

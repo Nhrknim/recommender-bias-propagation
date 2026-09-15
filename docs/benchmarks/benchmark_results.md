@@ -42,7 +42,8 @@
 
 Interactive plots and 2D t-SNE manifold projections are provided in [`notebooks/phase_4_tsne_visualization.ipynb`](../notebooks/phase_4_tsne_visualization.ipynb). Visual assets are preserved in [`docs/images/phase_4_tsne_visualization/`](images/phase_4_tsne_visualization/):
 
-- **Trajectory Curves**: [`images/phase_4_tsne_visualization/benchmark_trajectories.png`](images/phase_4_tsne_visualization/benchmark_trajectories.png)
-- **t-SNE Popularity Drift**: [`images/phase_4_tsne_visualization/tsne_popularity_drift.png`](images/phase_4_tsne_visualization/tsne_popularity_drift.png)
-- **t-SNE Genre Clusters**: [`images/phase_4_tsne_visualization/tsne_genre_clusters.png`](images/phase_4_tsne_visualization/tsne_genre_clusters.png)
-- **t-SNE Manifold Density (KDE)**: [`images/phase_4_tsne_visualization/tsne_manifold_density.png`](images/phase_4_tsne_visualization/tsne_manifold_density.png)
+- **Comparative Trajectory Curves**: [`images/phase_4_tsne_visualization/benchmark_trajectories.png`](images/phase_4_tsne_visualization/benchmark_trajectories.png)
+- **Model Subdirectories**: [`images/phase_4_tsne_visualization/bpr/`](images/phase_4_tsne_visualization/bpr/), [`images/phase_4_tsne_visualization/mf/`](images/phase_4_tsne_visualization/mf/), [`images/phase_4_tsne_visualization/pmf/`](images/phase_4_tsne_visualization/pmf/)
+- **t-SNE Popularity Drift (BPR)**: [`images/phase_4_tsne_visualization/bpr/tsne_popularity_drift.png`](images/phase_4_tsne_visualization/bpr/tsne_popularity_drift.png)
+- **t-SNE Genre Clusters (BPR)**: [`images/phase_4_tsne_visualization/bpr/tsne_genre_clusters.png`](images/phase_4_tsne_visualization/bpr/tsne_genre_clusters.png)
+- **t-SNE Manifold Density (KDE) (BPR)**: [`images/phase_4_tsne_visualization/bpr/tsne_manifold_density.png`](images/phase_4_tsne_visualization/bpr/tsne_manifold_density.png)
