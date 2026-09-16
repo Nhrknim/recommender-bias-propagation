@@ -53,17 +53,19 @@ jobs:
             exit 0
           fi
 
-          # Check if there are actual new commits to submit
-          echo "Checking if $HEAD_BRANCH has new commits compared to $UPSTREAM_REPO:$BASE_BRANCH..."
-          AHEAD_COUNT=$(gh api "repos/$UPSTREAM_REPO/compare/$BASE_BRANCH...$HEAD_BRANCH" --jq '.ahead_by' 2>/dev/null || echo "0")
-          echo "Commits ahead: $AHEAD_COUNT"
+          # Check if there are actual new commits and changed files to submit
+          echo "Checking if $HEAD_BRANCH has new commits and changed files compared to $UPSTREAM_REPO:$BASE_BRANCH..."
+          COMPARE_JSON=$(gh api "repos/$UPSTREAM_REPO/compare/$BASE_BRANCH...$HEAD_BRANCH" 2>/dev/null || echo "{}")
+          AHEAD_COUNT=$(echo "$COMPARE_JSON" | jq -r '.ahead_by // 0')
+          FILES_COUNT=$(echo "$COMPARE_JSON" | jq -r '(.files // []) | length')
+          echo "Commits ahead: $AHEAD_COUNT, Files changed: $FILES_COUNT"
 
-          if [ "$AHEAD_COUNT" -eq 0 ]; then
-            echo "Upstream is already fully up to date with $HEAD_BRANCH. No new commits to submit in a PR."
+          if [ "$AHEAD_COUNT" -eq 0 ] || [ "$FILES_COUNT" -eq 0 ]; then
+            echo "Upstream is already fully up to date with $HEAD_BRANCH (or changes are fork-only). No new files to submit in a PR."
             exit 0
           fi
 
-          echo "Found $AHEAD_COUNT new commit(s). Creating a new PR to $UPSTREAM_REPO..."
+          echo "Found $AHEAD_COUNT new commit(s) with $FILES_COUNT changed file(s). Creating a new PR to $UPSTREAM_REPO..."
           gh pr create \
             --repo "$UPSTREAM_REPO" \
             --head "$HEAD_BRANCH" \
