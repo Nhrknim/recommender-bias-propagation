@@ -1,0 +1,18 @@
+name: Sync Fork with Upstream
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'  # Runs automatically every 2 hours
+  workflow_dispatch:        # 1-click manual trigger in GitHub Actions UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync Fork from Upstream
+        env:
+          GH_TOKEN: ${{ secrets.UPSTREAM_PR_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Syncing Unknown-Geek from upstream Nhrknim..."
+          gh repo sync Unknown-Geek/recommender-bias-propagation --source Nhrknim/recommender-bias-propagation --branch main
+          echo "Fork successfully synced with upstream!"
