@@ -243,3 +243,6 @@ docs/benchmarks/*
 .DS_Store
 
 
+# Other Documents to be ignored
+
+PLAN.md
