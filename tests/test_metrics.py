@@ -16,7 +16,9 @@ from src.metrics import (
     compute_relative_norm_shift,
     compute_mag_ang_decomposition,
     compute_effective_rank,
+    compute_drift_metrics_32d,
 )
+
 
 class TestMetrics(unittest.TestCase):
 
@@ -130,5 +132,16 @@ class TestMetrics(unittest.TestCase):
         s_eff = compute_effective_rank(V_0)
         self.assertTrue(1.0 <= s_eff <= float(self.dim))
 
+        # Direct 32-D drift metrics
+        d_euc, d_cos, n_t, n_0 = compute_drift_metrics_32d(V_0, V_t_aligned)
+        self.assertEqual(d_euc.shape, (self.n_items,))
+        self.assertEqual(d_cos.shape, (self.n_items,))
+        self.assertEqual(n_t.shape, (self.n_items,))
+        self.assertEqual(n_0.shape, (self.n_items,))
+        np.testing.assert_allclose(d_euc, 0.0, atol=1e-4)
+        np.testing.assert_allclose(d_cos, 0.0, atol=1e-4)
+        np.testing.assert_allclose(n_t, n_0, atol=1e-4)
+
 if __name__ == "__main__":
     unittest.main()
+

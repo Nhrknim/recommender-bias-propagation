@@ -19,6 +19,7 @@ from src.metrics.geometry import (
     compute_relative_norm_shift,
     compute_mag_ang_decomposition,
     compute_effective_rank,
+    compute_drift_metrics_32d,
 )
 
 __all__ = [
@@ -40,4 +41,6 @@ __all__ = [
     "compute_relative_norm_shift",
     "compute_mag_ang_decomposition",
     "compute_effective_rank",
+    "compute_drift_metrics_32d",
 ]
+
