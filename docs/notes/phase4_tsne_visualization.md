@@ -183,9 +183,9 @@ Seeing the animation play in real time brings the theory to life: **recommendati
 
 ---
 
-### Deep Dive: The 3 Quantitative Measures Explained in Plain English
+### Deep Dive: The 3 Quantitative Measures in Simple Words
 
-When evaluating recommendation models, 2D projections (like t-SNE) are great for visual intuition, but they compress 32 mathematical dimensions into 2, which distorts true physical distances. To provide uncompromised quantitative proof of algorithmic bias, we measure the full **32-dimensional item vectors** using three complementary lenses:
+When evaluating recommendation models, 2D maps (like t-SNE) are great for visual intuition, but they squash 32 dimensions into 2, which distorts true physical distances. To provide an accurate picture of what is happening inside the model's brain, we look at the full **32-dimensional item vectors** using three simple ideas:
 
 ```text
                Original 32-D Vector v_i^(0)
@@ -199,34 +199,29 @@ When evaluating recommendation models, 2D projections (like t-SNE) are great for
                          (Length changes = Magnitude shift)
 ```
 
-#### 1. 32-D Euclidean Drift ($d_{\text{Euc}}$) — The "Odometer" of Movement
-* **The Concept**: Think of Euclidean drift like a **car's GPS odometer**. It measures the exact straight-line physical distance a movie's 32-dimensional coordinate traveled through the latent space from Generation $0$ to Generation $t$:
-  $$d_{\text{Euc}}(i, t) = \|\mathbf{v}_i^{(t)\text{aligned}} - \mathbf{v}_i^{(0)}\|_2 = \sqrt{\sum_{k=1}^{32} \left( v_{i,k}^{(t)\text{aligned}} - v_{i,k}^{(0)} \right)^2}$$
-* **What it tells us**: It answers: *"Did this movie physically move in the algorithm's memory?"*
-* **The Finding**: Viral blockbusters travel huge distances (high $d_{\text{Euc}}$) because they receive millions of click gradient updates. Meanwhile, long-tail niche movies have an odometer reading near **zero**—they never move because the algorithm never updates them.
+#### 1. 32-D Euclidean Drift — The "Odometer" of Movement
+* **The Idea**: Think of Euclidean drift like a **car's GPS odometer**. It measures the straight-line physical distance a movie traveled across the full 32-dimensional space from round 0 to round $t$.
+* **What it tells us**: *"Did this movie physically move in the algorithm's memory?"*
+* **The Finding**: Popular blockbusters travel huge distances because they receive millions of click updates. Meanwhile, long-tail niche movies have an odometer reading near **zero**—they barely move because the algorithm never updates them.
 
-#### 2. 32-D Cosine Drift ($d_{\text{Cos}}$) — The "Compass" of Taste Orientation
-* **The Concept**: Think of Cosine drift like a **compass needle**. It measures the pure **angle** ($\theta$) by which a movie rotated away from its original genre profile, completely ignoring how long the vector is:
-  $$d_{\text{Cos}}(i, t) = 1 - \cos(\theta_i) = 1 - \frac{\mathbf{v}_i^{(t)\text{aligned}} \cdot \mathbf{v}_i^{(0)}}{\|\mathbf{v}_i^{(t)\text{aligned}}\|_2 \|\mathbf{v}_i^{(0)}\|_2}$$
-  * $d_{\text{Cos}} = 0$: The compass didn't move at all (the movie still represents the exact same taste profile).
-  * $d_{\text{Cos}} > 0$: The compass has spun (the algorithm is reinterpreting the movie's conceptual identity).
-* **What it tells us**: It answers: *"Has the core meaning or topic of this movie changed?"*
-* **The Finding**: Even when a blockbuster doesn't change length, its compass spins dramatically toward the center of mainstream traffic. It stops pointing toward its original niche style and rotates toward generic popularity.
+#### 2. 32-D Cosine Drift — The "Compass" of Taste Orientation
+* **The Idea**: Think of Cosine drift like a **compass needle**. It measures the pure **angle** by which a movie rotated away from its original style or genre, completely ignoring how long the vector is.
+  * If the compass hasn't moved: the movie still represents the exact same taste profile.
+  * If the compass has spun: the algorithm is reinterpreting what kind of movie it is.
+* **What it tells us**: *"Has the core meaning or genre personality of this movie changed?"*
+* **The Finding**: Blockbuster compasses spin dramatically toward mainstream click hubs. The algorithm forgets the movie's authentic niche identity and re-labels it as generic popular content.
 
-#### 3. 32-D Vector Norm ($\|\mathbf{v}\|_2$) — The "Megaphone" of Algorithmic Influence
-* **The Concept**: Vector norm measures the **physical length** of the 32-D vector:
-  $$\|\mathbf{v}_i^{(t)}\|_2 = \sqrt{\sum_{k=1}^{32} (v_{i,k}^{(t)})^2}$$
-  In recommender math, recommendations are chosen by the dot product:
-  $$\text{Score}(u, i) = \mathbf{u}_u^\top \mathbf{v}_i = \|\mathbf{u}_u\|_2 \cdot \|\mathbf{v}_i\|_2 \cdot \cos(\theta)$$
-* **What it tells us**: Think of the norm as the **volume of a megaphone**. A movie with a huge norm shouts much louder than a movie with a tiny norm.
-* **The Finding**: Because popular movies accumulate thousands of feedback clicks, gradient descent continually stretches their vector lengths (**Norm Inflation**). Even if a small indie movie is a better conceptual match for a user's taste (higher $\cos \theta$), the blockbuster's giant megaphone drowns it out and wins the recommendation slot.
+#### 3. 32-D Vector Norm — The "Megaphone" of Algorithmic Influence
+* **The Idea**: Vector norm measures the **physical length** of the vector. In recommendation algorithms, items with longer vectors automatically produce higher scores. Think of vector length as the **volume of a megaphone**. A movie with a huge vector shouts much louder than a movie with a tiny vector.
+* **What it tells us**: *"How aggressively is the algorithm trying to push this movie?"*
+* **The Finding**: Because popular movies get clicked so often, the algorithm stretches their vector lengths (**Norm Inflation**). Even if an indie movie is a better match for a user's authentic taste, the blockbuster's giant megaphone drowns it out and steals the recommendation slot.
 
-#### 4. The Critical Guardrail: Why We Must Use Procrustes Alignment
-* **The "Spinning Globe" Problem**: Every time an AI model retrains with Stochastic Gradient Descent, the 32 coordinate axes can randomly rotate—like spinning a globe. The equator and poles are still in the same relative places, but their coordinates changed.
-* If you measure Euclidean or Cosine distance without fixing this spin, you would measure fake drift caused purely by random axis rotation.
-* **The Solution**: We apply **Reflection-Corrected Orthogonal Procrustes Alignment** ($\mathbf{V}_t \mathbf{R}^*$). This locks the globe in place, ensuring that any measured drift reflects **100% real algorithmic bias**, not random training noise.
+#### 4. The Guardrail: Procrustes Alignment (The "Spinning Globe")
+* **The Problem**: Every time an AI model retrains, the coordinate axes can randomly spin—just like spinning a globe. The continents stay in the same place relative to each other, but their coordinates change. If you measure distance without locking the globe in place, you would measure fake movement caused by random axis rotation.
+* **The Fix**: We use **Procrustes Alignment** to lock the globe in place before measuring. This guarantees that every bit of movement we measure is **100% genuine algorithmic bias**, not random training noise.
 
 ---
+
 
 
 
