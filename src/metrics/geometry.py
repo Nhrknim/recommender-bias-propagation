@@ -142,3 +142,54 @@ def compute_effective_rank(V_t: np.ndarray, epsilon: float = 1e-9) -> float:
 
     assert 1.0 <= s_eff <= float(dim) + 1e-3, f"Effective rank out of bounds [1, {dim}]: {s_eff}"
     return s_eff
+
+
+def compute_drift_metrics_32d(
+    V_0: np.ndarray, 
+    V_t_aligned: np.ndarray, 
+    epsilon: float = 1e-9
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Computes direct 32-D quantitative geometry metrics per item between V_0 and V_t_aligned:
+    1. Euclidean drift: ||v_i^{(t)\text{aligned}} - v_i^{(0)}||_2
+    2. Cosine drift: 1 - cos(v_i^{(t)\text{aligned}}, v_i^{(0)})
+    3. Generation t vector L2 norms: ||v_i^{(t)}||_2
+    4. Baseline vector L2 norms: ||v_i^{(0)}||_2
+
+    Args:
+        V_0: Baseline item factor matrix of shape (|I|, d).
+        V_t_aligned: Procrustes aligned item factor matrix of shape (|I|, d).
+        epsilon: Numerical stability cushion.
+
+    Returns:
+        euclidean_drift: 1D array of shape (|I|,) with L2 displacement distances.
+        cosine_drift: 1D array of shape (|I|,) with angular cosine drift in [0, 2].
+        norms_t: 1D array of shape (|I|,) with generation t vector norms.
+        norms_0: 1D array of shape (|I|,) with baseline vector norms.
+    """
+    assert V_0.shape == V_t_aligned.shape, f"Shape mismatch: {V_0.shape} vs {V_t_aligned.shape}"
+
+    # 1. Euclidean Drift
+    euclidean_drift = np.linalg.norm(V_t_aligned - V_0, axis=1)
+
+    # 2. Vector Norms
+    norms_0 = np.linalg.norm(V_0, axis=1)
+    norms_t = np.linalg.norm(V_t_aligned, axis=1)
+
+    # 3. Cosine Drift
+    dot_products = np.sum(V_0 * V_t_aligned, axis=1)
+    denom = (norms_0 * norms_t) + epsilon
+    cos_sim = np.clip(dot_products / denom, -1.0, 1.0)
+    cosine_drift = 1.0 - cos_sim
+
+    assert not np.isnan(euclidean_drift).any(), "NaN in euclidean_drift"
+    assert not np.isnan(cosine_drift).any(), "NaN in cosine_drift"
+    assert not np.isnan(norms_t).any(), "NaN in norms_t"
+
+    return (
+        euclidean_drift.astype(np.float32),
+        cosine_drift.astype(np.float32),
+        norms_t.astype(np.float32),
+        norms_0.astype(np.float32)
+    )
+

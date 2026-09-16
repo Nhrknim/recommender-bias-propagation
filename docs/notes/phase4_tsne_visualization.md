@@ -156,6 +156,34 @@ Seeing the animation play in real time brings the theory to life: **recommendati
 
 ---
 
+### Visual 6: 32-Dimensional Quantitative Drift Trajectory Animation (GIF)
+* **Quantitative Animations by Model**:
+  * **BPR Quantitative Animation**: [docs/images/phase_4_tsne_visualization/bpr/quantitative_embedding_drift_trajectory.gif](../images/phase_4_tsne_visualization/bpr/quantitative_embedding_drift_trajectory.gif)
+  * **MF Quantitative Animation**: [docs/images/phase_4_tsne_visualization/mf/quantitative_embedding_drift_trajectory.gif](../images/phase_4_tsne_visualization/mf/quantitative_embedding_drift_trajectory.gif)
+  * **PMF Quantitative Animation**: [docs/images/phase_4_tsne_visualization/pmf/quantitative_embedding_drift_trajectory.gif](../images/phase_4_tsne_visualization/pmf/quantitative_embedding_drift_trajectory.gif)
+
+![32-D Quantitative Embedding Drift Animation (BPR)](../images/phase_4_tsne_visualization/bpr/quantitative_embedding_drift_trajectory.gif)
+
+#### 1. What You Are Looking At:
+* A dedicated 50-frame animation displaying **exact full-dimensional mathematical measurements** computed directly on the **32-dimensional item vectors** without relying solely on 2D projections.
+* **Left Panel**: 2D PCA projection of the 32-D space with red attractor arrows tracing the top 30 viral hits.
+* **Right Panels (3 Live Synchronized Metric Dashboards)**:
+  1. **Top (32-D Euclidean Drift $\bar{d}_{\text{Euc}}$)**: Tracks true straight-line physical displacement in $\mathbb{R}^{32}$ from Generation $0$ to $t$ after Procrustes alignment.
+  2. **Middle (32-D Cosine Drift $\bar{d}_{\text{Cos}}$)**: Tracks pure angular rotation ($1 - \cos \theta$) of movie taste profiles, independent of vector length.
+  3. **Bottom (32-D Vector Norm $\bar{\|\mathbf{v}\|}_2$)**: Tracks the physical magnitude/length of the vectors.
+* **Color Curves by Popularity Tier**:
+  * **Orange Curve**: Short-tail viral hits ($\ge 250$ ratings).
+  * **Purple Curve**: Mid-tail titles ($50 - 249$ ratings).
+  * **Green Curve**: Long-tail niche titles ($< 50$ ratings).
+
+#### 2. What the Quantitative Numbers Prove:
+* **The Disparity Gap**: Short-tail blockbusters undergo massive Euclidean displacement and angular rotation as they are pulled toward mainstream user click hubs.
+* **The Frozen Long Tail**: Niche green curves remain virtually flat near zero across all 50 generations. Because long-tail items receive almost no recommendation exposure or feedback clicks, their 32-D coordinates never receive gradient updates, mathematically freezing them in place.
+* **Norm Inflation**: In MF and BPR, popular item vectors expand in magnitude, giving them an unfair mathematical advantage in dot product recommendations ($\mathbf{u}^\top \mathbf{v}_i$) over unexpanded niche vectors.
+
+---
+
+
 ### Model Architecture Comparison: How MF, PMF, and BPR React Differently
 
 | Model | Loss Formulation | Geometric Drift Signature | Physical Behavior in Plain English |

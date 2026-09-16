@@ -56,5 +56,7 @@ This directory centralizes all visual assets, generated plots, and diagnostic fi
   * `tsne_genre_clusters.png`: Side-by-side ($t=0$ vs $t=9$) movie genre spatial separation and homogenization.
   * `tsne_manifold_density.png`: 2D Kernel Density Estimation (KDE) comparing initial factor dispersion to final latent collapse.
   * `embedding_drift_trajectory.gif`: 50-generation animated GIF showing continuous item embedding drift alongside live Catalog Gini and Effective Rank metrics.
+  * `quantitative_embedding_drift_trajectory.gif`: 50-generation animated GIF showing continuous item embedding drift alongside live quantitative 32-D metrics (Mean Euclidean Drift, Mean Cosine Drift, Mean Vector Norm) stratified across Short-tail, Mid-tail, and Long-tail items.
+
 
 
