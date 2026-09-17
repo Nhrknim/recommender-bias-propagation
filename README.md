@@ -48,7 +48,8 @@ The project combines empirical data preparation, multi-model benchmarking using 
 │   ├── phase_1_data_prep.ipynb               # Phase 1: Data prep & baseline inequality metrics
 │   ├── phase_2_cornac_benchmark.ipynb        # Phase 2: Cornac model training & benchmarking
 │   ├── phase_2_mf_overfit.ipynb              # Phase 2: Matrix Factorization overfit analysis
-│   └── phase_3_mf_pmf_bpr.ipynb              # Phase 3: Latent space dynamics (MF, PMF, BPR)
+│   ├── phase_3_mf_pmf_bpr.ipynb              # Phase 3: Latent space dynamics (MF, PMF, BPR)
+│   └── phase_4_tsne_visualization.ipynb      # Phase 4: Embedding space manifold & drift visuals
 ├── scripts/                                  # Benchmark & simulation execution scripts
 │   └── run_full_benchmark.py                 # Full capability multi-model benchmark script
 ├── src/                                      # Closed-loop simulator python architecture

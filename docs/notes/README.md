@@ -31,10 +31,12 @@ This directory contains the theoretical foundations, empirical notes, mathematic
 
 ### 4. Phase 4: Closed-Loop Simulation & Latent Manifold Visualization
 * [**phase4_tsne_visualization.md**](./phase4_tsne_visualization.md)
-  * Accessible, plain-language walkthrough of the 10-generation closed-loop simulation.
+  * Accessible, plain-language walkthrough of the 10- and 50-generation closed-loop simulation.
   * 4-tier benchmark trajectory dynamics ($G$, $D_{\text{KL}}$, $NDCG@10$, $S_{\text{eff}}$).
   * 2D t-SNE latent space maps showing popularity gravity traps, genre blurring, and manifold density collapse.
-  * Complete image breakdowns and direct links to all generated visual assets.
+  * Full **32-dimensional quantitative embedding drift analysis**: Euclidean drift (odometer), Cosine drift (compass), and Vector Norm magnitude (megaphone) across popularity tiers.
+  * Complete image breakdowns and direct links to all generated visual assets and 50-frame dynamic GIFs across BPR, MF, and PMF.
+
 
 ### 5. Theoretical Foundations & Closed-Loop Mechanics
 * [**bias_propagation_and_embedding_dynamics.md**](./bias_propagation_and_embedding_dynamics.md)
