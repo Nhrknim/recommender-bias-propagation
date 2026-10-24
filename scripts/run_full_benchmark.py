@@ -10,8 +10,9 @@ sys.path.insert(0, ".")
 
 from src.data.dataset import load_movielens_1m, load_movielens_genres
 from src.adapters.cornac_adapters import (
-    CornacMFAdapter, 
-    CornacBPRAdapter, 
+    CornacMFAdapter,
+    CornacPMFAdapter,
+    CornacBPRAdapter,
     CornacMostPopAdapter
 )
 from src.adapters.lightgcn_adapter import LightGCNAdapter
@@ -44,12 +45,13 @@ def main():
     print(f"  * Baseline Train Interactions (D_0): {train_mat.nnz:,}")
     print(f"  * Held-Out Test Interactions (D_test): {test_mat.nnz:,}")
 
-    # 2. Experiment configuration
+    # 2. Experiment configuration — all 5 models
     models_to_test = [
-        ("Matrix Factorization (MF)", CornacMFAdapter, {"dim": 32, "max_iter": 10}),
-        ("Bayesian Personalized Ranking (BPR)", CornacBPRAdapter, {"dim": 32, "max_iter": 10}),
-        ("Most Popular Baseline (MostPop)", CornacMostPopAdapter, {}),
-        ("LightGCN (Graph CF)", LightGCNAdapter, {"dim": 32, "n_layers": 3, "epochs": 10}),
+        ("Matrix Factorization (MF)",               CornacMFAdapter,      {"dim": 32, "max_iter": 10}),
+        ("Probabilistic Matrix Factorization (PMF)", CornacPMFAdapter,     {"dim": 32, "max_iter": 10}),
+        ("Bayesian Personalized Ranking (BPR)",     CornacBPRAdapter,     {"dim": 32, "max_iter": 10}),
+        ("Most Popular Baseline (MostPop)",          CornacMostPopAdapter, {}),
+        ("LightGCN (Graph CF)",                      LightGCNAdapter,      {"dim": 32, "n_layers": 3, "epochs": 5, "batch_size": 32768, "device": "cpu"}),
     ]
 
     seeds = [42, 123, 456]
@@ -59,6 +61,37 @@ def main():
 
     benchmark_summary = {}
     raw_results = {}
+
+    # Checkpoint path: written after every model completes to protect against crashes
+    os.makedirs("docs/benchmarks", exist_ok=True)
+    checkpoint_path = f"docs/benchmarks/{run_id}_checkpoint.json"
+
+    def flush_checkpoint():
+        """Write all completed models to disk immediately and update the plot."""
+        payload = {
+            "run_id": run_id,
+            "status": "in_progress",
+            "timestamp": datetime.now().isoformat(),
+            "dataset": "MovieLens-1M",
+            "n_users": n_users,
+            "n_items": n_items,
+            "generations": T,
+            "k": K,
+            "alpha": alpha,
+            "seeds": seeds,
+            "models_completed": list(benchmark_summary.keys()),
+            "results": benchmark_summary,
+        }
+        with open(checkpoint_path, "w", encoding="utf-8") as _f:
+            json.dump(payload, _f, indent=2)
+        with open("docs/benchmarks/latest_checkpoint.json", "w", encoding="utf-8") as _f:
+            json.dump(payload, _f, indent=2)
+        print(f"  [checkpoint] Flushed {len(benchmark_summary)} model(s) → {checkpoint_path}")
+        try:
+            import subprocess
+            subprocess.run([sys.executable, "scripts/plot_benchmark_from_json.py", "--json", checkpoint_path], check=False)
+        except Exception as _e:
+            print(f"  [checkpoint] Plot update failed: {_e}")
 
     # 3. Execute closed-loop simulation suite
     print(f"\n[Phase 2] Executing closed-loop simulations across {len(models_to_test)} models, {len(seeds)} seeds, T={T} generations (alpha={alpha})...")
@@ -84,6 +117,9 @@ def main():
         print(f"[OK] Completed {model_name} in {elapsed:.2f}s")
         benchmark_summary[model_name] = sim_results["aggregated"]
         raw_results[model_name] = sim_results
+
+        # ── Flush to disk immediately after each model ────────────────────────
+        flush_checkpoint()
 
     # 4. Generate & Print Comparative Report
     print("\n" + "=" * 80)
@@ -169,6 +205,14 @@ def main():
     print(f"\n[OK] Saved run markdown artifact: '{unique_md}'")
     print(f"[OK] Saved run JSON metrics data:   '{unique_json}'")
     print(f"[OK] Updated latest run pointer:    '{latest_md}'")
+
+    # 6. Generate final plot
+    try:
+        import subprocess
+        subprocess.run([sys.executable, "scripts/plot_benchmark_from_json.py", "--json", unique_json], check=True)
+        print(f"[OK] Generated final benchmark plot from {unique_json}")
+    except Exception as e:
+        print(f"[WARN] Failed to generate final plot: {e}")
 
 if __name__ == "__main__":
     main()

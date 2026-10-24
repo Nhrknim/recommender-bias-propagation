@@ -203,11 +203,9 @@ class LightGCNAdapter(BaseRecommenderAdapter):
         self.lr = lr
         self.reg = reg
 
-        # Auto-select accelerator: MPS > CUDA > CPU
+        # Auto-select accelerator: CUDA > CPU (MPS disabled for sparse COO graph ops due to multi-process deadlock)
         if device is not None:
             self.device = torch.device(device)
-        elif torch.backends.mps.is_available():
-            self.device = torch.device("mps")
         elif torch.cuda.is_available():
             self.device = torch.device("cuda")
         else:
