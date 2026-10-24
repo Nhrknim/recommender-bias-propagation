@@ -33,10 +33,18 @@ The project combines empirical data preparation, multi-model benchmarking using 
 ### Phase 4 / System Implementation: Closed-Loop Simulator Architecture
 - Fully implemented and verified all 5 core modular closed-loop simulation subsystems (`src/`) specified in [`SPEC.md`](SPEC.md) with **23 unit tests** passing OK:
   - **Subsystem 1 (`src/data/`):** Invariant State & Data Buffer — Dataset-agnostic loaders (`load_dataset`, `load_movielens_1m`, `load_movielens_genres`), continuous zero-indexing, dual-matrix interaction accumulation ($\mathcal{D}_t$), and buffer merge/deduplication.
-  - **Subsystem 2 (`src/adapters/`):** Architecture-Agnostic Recommender Interface — Abstract facade adapters (`BaseRecommenderAdapter`, `CornacMFAdapter`, `CornacBPRAdapter`, `CornacUserKNNAdapter`, `CornacMostPopAdapter`) with coordinate alignment and deterministic seeding.
+  - **Subsystem 2 (`src/adapters/`):** Architecture-Agnostic Recommender Interface — Abstract facade adapters (`BaseRecommenderAdapter`, `CornacMFAdapter`, `CornacBPRAdapter`, `CornacUserKNNAdapter`, `CornacMostPopAdapter`, `LightGCNAdapter`) with coordinate alignment and deterministic seeding.
   - **Subsystem 3 (`src/engine/`):** Vectorized User Interaction Engine — Vectorized position decay exposure, temperature-scaled intrinsic relevance, sub-linear logarithmic conformity, and Poisson session budget truncation ($\lambda=3.0$).
   - **Subsystem 4 (`src/metrics/`):** Multi-Tier Diagnostic Engine — Audits catalog exposure inequality (Gini, Coverage@K, APLT@K), user cohort taste drift ($D_{\text{KL}}$), ranking utility (Precision@K, Recall@K, NDCG@K, Mann-Whitney AUC), and latent space geometry (Procrustes rigid alignment $\det(R^*)=+1$, relative norm shift $R_{\text{norm}}$, effective rank $S_{\text{eff}}$).
   - **Subsystem 5 (`src/orchestrator/`):** Multi-Seed Simulation Orchestrator — Multi-seed deterministic random state locking, $T$-generation closed-loop simulation execution, memory-safe garbage collection, and aggregated statistical reporting ($\mu, \sigma$).
+
+### Phase 5: LightGCN — Graph-Powered Bias Amplification
+- Implements **LightGCN** (He et al., KDD 2020) as the first graph-based model in the closed-loop simulator, fully conforming to `BaseRecommenderAdapter`.
+- Introduces 3-layer symmetric normalised adjacency propagation ($D^{-1/2}AD^{-1/2}$) over the user-item bipartite graph, with mean-pooled final embeddings trained via BPR loss.
+- Demonstrates the **Graph Centrality Hypothesis**: popular items with high bipartite degree receive stronger propagated gradient signals, creating a structural popularity amplification loop absent in MF-family models.
+- Auto-selects compute device: **MPS (Apple Silicon) > CUDA > CPU**.
+- Ships with **13 unit tests** covering shapes, NaN guards, determinism, edge cases, and numerical stability (`tests/test_lightgcn_adapter.py`).
+- Adds companion research documentation: [`docs/notes/phase5_lightgcn.md`](docs/notes/phase5_lightgcn.md) and visual asset catalog entry [`docs/images/phase_5_lightgcn/`](docs/images/phase_5_lightgcn/).
 
 ---
 
@@ -49,7 +57,8 @@ The project combines empirical data preparation, multi-model benchmarking using 
 │   ├── phase_2_cornac_benchmark.ipynb        # Phase 2: Cornac model training & benchmarking
 │   ├── phase_2_mf_overfit.ipynb              # Phase 2: Matrix Factorization overfit analysis
 │   ├── phase_3_mf_pmf_bpr.ipynb              # Phase 3: Latent space dynamics (MF, PMF, BPR)
-│   └── phase_4_tsne_visualization.ipynb      # Phase 4: Embedding space manifold & drift visuals
+│   ├── phase_4_tsne_visualization.ipynb      # Phase 4: Embedding space manifold & drift visuals
+│   └── phase_5_lightgcn.ipynb                # Phase 5: LightGCN graph-powered bias amplification
 ├── scripts/                                  # Benchmark & simulation execution scripts
 │   └── run_full_benchmark.py                 # Full capability multi-model benchmark script
 ├── src/                                      # Closed-loop simulator python architecture
@@ -58,10 +67,11 @@ The project combines empirical data preparation, multi-model benchmarking using 
 │   ├── engine/                               # Subsystem 3: User interaction engine
 │   ├── metrics/                              # Subsystem 4: Multi-tier diagnostic engine
 │   └── orchestrator/                         # Subsystem 5: Multi-seed simulation runner
-├── tests/                                    # Automated unit test suite (23 tests)
+├── tests/                                    # Automated unit test suite
 │   ├── test_buffer.py                        # Buffer merge & deduplication tests
 │   ├── test_dataset.py                       # Dataset loader & zero-indexing tests
 │   ├── test_adapters.py                      # Recommender facade & embedding alignment tests
+│   ├── test_lightgcn_adapter.py              # LightGCN model & adapter tests (13 tests)
 │   ├── test_engine.py                        # User interaction engine & simulator tests
 │   ├── test_metrics.py                       # 4-tier diagnostic metrics tests
 │   └── test_orchestrator.py                  # Multi-seed simulation pipeline tests
@@ -115,6 +125,7 @@ python scripts/run_full_benchmark.py
 - **Phase 2 Overfit Notebook**: [`notebooks/phase_2_mf_overfit.ipynb`](notebooks/phase_2_mf_overfit.ipynb)
 - **Phase 3 Latent Dynamics Notebook**: [`notebooks/phase_3_mf_pmf_bpr.ipynb`](notebooks/phase_3_mf_pmf_bpr.ipynb)
 - **Phase 4 t-SNE Manifold Visualization**: [`notebooks/phase_4_tsne_visualization.ipynb`](notebooks/phase_4_tsne_visualization.ipynb)
+- **Phase 5 LightGCN Graph Bias**: [`notebooks/phase_5_lightgcn.ipynb`](notebooks/phase_5_lightgcn.ipynb)
 
 ### Technical Documentation & Research Notes
 - **Documentation Hub**: [`docs/README.md`](docs/README.md)
@@ -124,6 +135,7 @@ python scripts/run_full_benchmark.py
 - **Phase 3 Representation Geometry**: [`docs/notes/phase3_representation_geometry.md`](docs/notes/phase3_representation_geometry.md)
 - **Phase 3 Popularity Trap Guide**: [`docs/notes/phase3_beginners_guide.md`](docs/notes/phase3_beginners_guide.md)
 - **Phase 4 Latent Manifold Visualization**: [`docs/notes/phase4_tsne_visualization.md`](docs/notes/phase4_tsne_visualization.md)
+- **Phase 5 LightGCN Graph Bias**: [`docs/notes/phase5_lightgcn.md`](docs/notes/phase5_lightgcn.md)
 - **Recommendation Models Breakdown**: [`docs/notes/recommender_models.md`](docs/notes/recommender_models.md)
 - **Bias Propagation & Embedding Dynamics**: [`docs/notes/bias_propagation_and_embedding_dynamics.md`](docs/notes/bias_propagation_and_embedding_dynamics.md)
 - **Visual Assets & Trajectory Figures**: [`docs/images/`](docs/images/)

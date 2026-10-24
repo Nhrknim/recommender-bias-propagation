@@ -38,7 +38,16 @@ This directory contains the theoretical foundations, empirical notes, mathematic
   * Complete image breakdowns and direct links to all generated visual assets and 50-frame dynamic GIFs across BPR, MF, and PMF.
 
 
-### 5. Theoretical Foundations & Closed-Loop Mechanics
+### 5. Phase 5: LightGCN — Graph-Powered Bias Amplification
+* [**phase5_lightgcn.md**](./phase5_lightgcn.md)
+  * Introduction of **LightGCN** as the first graph-based model in the closed-loop simulation.
+  * Explanation of how bipartite degree centrality creates a structural popularity amplification loop absent in MF-family models.
+  * Mathematical derivation of the normalised adjacency propagation ($D^{-1/2}AD^{-1/2}$) and why it favours high-degree nodes.
+  * 4-tier trajectory comparison of LightGCN vs. MF / BPR / MostPop across 10 feedback generations.
+  * t-SNE popularity drift, genre cluster homogenisation, manifold density compression, and 50-generation quantitative drift animations.
+  * Graph Centrality Hypothesis: popular items amplify faster via structural connectivity, not just click frequency.
+
+### 6. Theoretical Foundations & Closed-Loop Mechanics
 * [**bias_propagation_and_embedding_dynamics.md**](./bias_propagation_and_embedding_dynamics.md)
   * Formal distinction between static algorithmic bias vs. dynamic closed-loop bias amplification.
   * 4-step closed-loop serving architecture: Candidate Recommendation $\to$ Vectorized Click Simulation $\to$ Buffer Ingestion $\to$ Cold Retraining.

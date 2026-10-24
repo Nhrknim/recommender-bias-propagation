@@ -21,7 +21,8 @@ docs/
 │   ├── phase_1_data_prep/         # Popularity distribution & inequality curves (phase_1_data_prep.ipynb)
 │   ├── phase_2_cornac_benchmark/  # NDCG vs. Gini trade-off frontiers (phase_2_cornac_benchmark.ipynb)
 │   ├── phase_3_mf_pmf_bpr/        # Latent norm histograms, drift & collapse (phase_3_mf_pmf_bpr.ipynb)
-│   └── phase_4_tsne_visualization/# Trajectories & 2D t-SNE projections (phase_4_tsne_visualization.ipynb)
+│   ├── phase_4_tsne_visualization/# Trajectories & 2D t-SNE projections (phase_4_tsne_visualization.ipynb)
+│   └── phase_5_lightgcn/          # LightGCN graph bias trajectories & drift (phase_5_lightgcn.ipynb)
 │
 ├── notes/                         # Core research notes and phase-by-phase documentation
 │   ├── README.md                  # Comprehensive index of all research notes
@@ -29,6 +30,8 @@ docs/
 │   ├── phase2_cornac_models.md    # Phase 2: Static model evaluation & Cornac benchmarks
 │   ├── phase3_representation_geometry.md # Phase 3: Empirical item representation geometry
 │   ├── phase3_beginners_guide.md  # Phase 3: Conceptual guide to the popularity trap
+│   ├── phase4_tsne_visualization.md # Phase 4: t-SNE manifold & closed-loop simulation
+│   ├── phase5_lightgcn.md         # Phase 5: LightGCN graph-powered bias amplification
 │   ├── recommender_models.md      # Algorithm mathematical formulations & Cornac mappings
 │   └── bias_propagation_and_embedding_dynamics.md # Dynamic feedback loop theory & mechanics
 │
@@ -68,7 +71,8 @@ docs/
 * [**Phase 2: Cornac Model Benchmarks**](./notes/phase2_cornac_models.md)
 * [**Phase 3: Representation Geometry**](./notes/phase3_representation_geometry.md)
 * [**Phase 3: Conceptual Guide**](./notes/phase3_beginners_guide.md)
-* [**Phase 4: Latent Manifold & Trajectory Visualization**](./notes/phase4_tsne_visualization.md)
+* [**Phase 4: Latent Manifold Visualization**](./notes/phase4_tsne_visualization.md)
+* [**Phase 5: LightGCN Graph Bias**](./notes/phase5_lightgcn.md)
 * [**Recommender Models Reference**](./notes/recommender_models.md)
 * [**Closed-Loop Bias Dynamics Theory**](./notes/bias_propagation_and_embedding_dynamics.md)
 

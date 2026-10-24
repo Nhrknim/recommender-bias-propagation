@@ -14,6 +14,7 @@ from src.adapters.cornac_adapters import (
     CornacBPRAdapter, 
     CornacMostPopAdapter
 )
+from src.adapters.lightgcn_adapter import LightGCNAdapter
 from src.orchestrator import run_simulation_pipeline
 
 def main():
@@ -47,7 +48,8 @@ def main():
     models_to_test = [
         ("Matrix Factorization (MF)", CornacMFAdapter, {"dim": 32, "max_iter": 10}),
         ("Bayesian Personalized Ranking (BPR)", CornacBPRAdapter, {"dim": 32, "max_iter": 10}),
-        ("Most Popular Baseline (MostPop)", CornacMostPopAdapter, {})
+        ("Most Popular Baseline (MostPop)", CornacMostPopAdapter, {}),
+        ("LightGCN (Graph CF)", LightGCNAdapter, {"dim": 32, "n_layers": 3, "epochs": 10}),
     ]
 
     seeds = [42, 123, 456]

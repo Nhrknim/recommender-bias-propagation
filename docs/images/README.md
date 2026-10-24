@@ -12,6 +12,7 @@ This directory centralizes all visual assets, generated plots, and diagnostic fi
 | [`notebooks/phase_2_cornac_benchmark.ipynb`](../../notebooks/phase_2_cornac_benchmark.ipynb) | [`phase_2_cornac_benchmark/`](./phase_2_cornac_benchmark/) | Accuracy ($NDCG@10$) vs. Popularity Bias (Gini) trade-off frontiers |
 | [`notebooks/phase_3_mf_pmf_bpr.ipynb`](../../notebooks/phase_3_mf_pmf_bpr.ipynb) | [`phase_3_mf_pmf_bpr/`](./phase_3_mf_pmf_bpr/) | Latent embedding norm shifts, origin collapse, and angular drift plots |
 | [`notebooks/phase_4_tsne_visualization.ipynb`](../../notebooks/phase_4_tsne_visualization.ipynb) | [`phase_4_tsne_visualization/`](./phase_4_tsne_visualization/) | 4-tier benchmark trajectories, 2D t-SNE drift vectors, genre clusters, and KDE densities |
+| [`notebooks/phase_5_lightgcn.ipynb`](../../notebooks/phase_5_lightgcn.ipynb) | [`phase_5_lightgcn/`](./phase_5_lightgcn/) | LightGCN 4-tier bias trajectories, graph-structural popularity drift, genre homogenisation, manifold collapse, and 50-generation drift GIFs |
 
 ---
 
@@ -58,5 +59,15 @@ This directory centralizes all visual assets, generated plots, and diagnostic fi
   * `embedding_drift_trajectory.gif`: 50-generation animated GIF showing continuous item embedding drift alongside live Catalog Gini and Effective Rank metrics.
   * `quantitative_embedding_drift_trajectory.gif`: 50-generation animated GIF showing continuous item embedding drift alongside live quantitative 32-D metrics (Mean Euclidean Drift, Mean Cosine Drift, Mean Vector Norm) stratified across Short-tail, Mid-tail, and Long-tail items.
 
+---
 
-
+### 5. Phase 5: LightGCN — Graph-Powered Bias Amplification ([`phase_5_lightgcn/`](./phase_5_lightgcn/))
+* **Notebook**: [`notebooks/phase_5_lightgcn.ipynb`](../../notebooks/phase_5_lightgcn.ipynb)
+* **Comparative Cross-Model Dashboard**:
+  * `benchmark_trajectories_lightgcn.png`: 4-tier benchmark metric trajectories ($G$, $D_{\text{KL}}$, $NDCG@10$, $S_{\text{eff}}$) comparing LightGCN against MF, BPR, and MostPop across 10 generations.
+* **LightGCN-Specific Assets**:
+  * `tsne_popularity_drift.png`: 2D t-SNE manifold showing graph-structural popular item attractor consolidation ($t=0$ vs $t=9$).
+  * `tsne_genre_clusters.png`: Genre boundary homogenisation driven by co-click graph propagation ($t=0$ vs $t=9$).
+  * `tsne_manifold_density.png`: KDE density compression showing LightGCN's most extreme manifold collapse among all studied models.
+  * `embedding_drift_trajectory.gif`: 50-generation animated GIF tracking graph-powered popular item clustering alongside live Gini and Effective Rank.
+  * `quantitative_embedding_drift_trajectory.gif`: 50-generation animated GIF of 32-D Euclidean drift, Cosine drift, and Vector Norm across popularity tiers, showing widest Short-tail vs. Long-tail disparity of any model.

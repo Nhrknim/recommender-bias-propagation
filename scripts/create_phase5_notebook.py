@@ -1,0 +1,294 @@
+import json
+import os
+
+notebook = {
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Phase 5: LightGCN — Graph-Powered Bias Amplification\n",
+    "\n",
+    "This notebook introduces **LightGCN** (He et al., 2020) as the first graph-based collaborative filtering model in our longitudinal closed-loop recommender bias study.\n",
+    "\n",
+    "### Core Theoretical Focus:\n",
+    "1. **Graph Convolution Mechanics**: How normalized bipartite graph propagation ($E^{(l+1)} = D^{-1/2} A D^{-1/2} E^{(l)}$) aggregates high-order neighbor signals.\n",
+    "2. **The Graph Centrality Hypothesis**: Unlike Matrix Factorization (MF) and Bayesian Personalized Ranking (BPR)—which amplify bias purely through click gradients and sampling frequencies—LightGCN possesses a **structural bias mechanism** rooted in bipartite degree centrality.\n",
+    "3. **Multi-Tier Benchmark Trajectories**: Tracking Catalog Exposure Inequality ($G$), User Taste Drift ($D_{\\text{KL}}$), Recommendation Accuracy ($NDCG@10$), and Manifold Effective Rank ($S_{\\text{eff}}$) across 10 generations.\n",
+    "4. **Manifold & Quantitative Dynamics**: Visualizing 2D t-SNE attractor consolidation, genre cluster blurring, kernel density singularity, and 50-generation dynamic animations."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import os\n",
+    "import sys\n",
+    "import json\n",
+    "import numpy as np\n",
+    "import scipy.sparse as sp\n",
+    "import matplotlib.pyplot as plt\n",
+    "import seaborn as sns\n",
+    "import pandas as pd\n",
+    "from sklearn.manifold import TSNE\n",
+    "from IPython.display import Image as IPImage, display\n",
+    "\n",
+    "sys.path.insert(0, '..')\n",
+    "\n",
+    "from src.data.dataset import load_movielens_1m\n",
+    "from src.data.buffer import merge_and_deduplicate\n",
+    "from src.adapters.lightgcn_adapter import LightGCNAdapter\n",
+    "from src.engine import simulate_user_clicks\n",
+    "from src.metrics.macro import compute_exposure_gini\n",
+    "from src.metrics.geometry import (\n",
+    "    compute_reflection_corrected_procrustes,\n",
+    "    compute_effective_rank,\n",
+    "    compute_drift_metrics_32d,\n",
+    ")\n",
+    "\n",
+    "%matplotlib inline\n",
+    "plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')\n",
+    "plt.rcParams.update({\n",
+    "    'font.size': 11,\n",
+    "    'axes.titlesize': 13,\n",
+    "    'axes.labelsize': 12,\n",
+    "    'figure.dpi': 150\n",
+    "})\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 1. Multi-Tier Benchmark Metric Trajectories\n",
+    "\n",
+    "We evaluate 4 model architectures across 10 feedback generations on MovieLens-1M:\n",
+    "- **Matrix Factorization (MF)**: Pointwise MSE baseline\n",
+    "- **Bayesian Personalized Ranking (BPR)**: Pairwise ranking baseline\n",
+    "- **Most Popular (MostPop)**: Non-personalized heuristic ceiling\n",
+    "- **LightGCN (Graph CF)**: 3-layer bipartite graph convolution network\n",
+    "\n",
+    "### Key Hypotheses:\n",
+    "- **Gini ($G$)**: LightGCN compounds inequality faster than BPR because high-degree items receive larger gradient allocations via shared neighbors.\n",
+    "- **Taste Drift ($D_{\\text{KL}}$)**: Users converge toward popular genres faster as multi-hop message passing homogenizes latent representations.\n",
+    "- **NDCG@10**: LightGCN exhibits superior initial ranking accuracy at $t=0$, but degrades faster under feedback loop concentration.\n",
+    "- **Effective Rank ($S_{\\text{eff}}$)**: Latent dimensionality collapses into fewer active principal components due to degree centrality dominance."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "bench_img_path = '../docs/images/phase_5_lightgcn/benchmark_trajectories_lightgcn.png'\n",
+    "if os.path.exists(bench_img_path):\n",
+    "    display(IPImage(filename=bench_img_path, width=950))\n",
+    "else:\n",
+    "    print('Trajectory asset not found at', bench_img_path)\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2. Ingest Dataset & Multi-Hop Graph Convolution Pipeline\n",
+    "\n",
+    "We load MovieLens-1M (threshold $\\ge 4.0$, 80/20 train/test split) and extract primary movie genres from `movies.dat`."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "train_mat, test_mat, u2c, i2c = load_movielens_1m('../ml-1m/ratings.dat', threshold=4.0, split_ratio=0.8)\n",
+    "n_users, n_items = train_mat.shape\n",
+    "\n",
+    "df_movies = pd.read_csv('../ml-1m/movies.dat', sep='::', names=['item_id', 'title', 'genres'], engine='python', encoding='latin-1')\n",
+    "primary_genres = ['Unknown'] * n_items\n",
+    "for _, row in df_movies.iterrows():\n",
+    "    raw_id = row['item_id']\n",
+    "    if raw_id in i2c:\n",
+    "        code = i2c[raw_id]\n",
+    "        genres = str(row['genres']).split('|')\n",
+    "        primary_genres[code] = genres[0] if genres else 'Unknown'\n",
+    "\n",
+    "print(f\"Ingestion complete: {n_users} users, {n_items} items, {train_mat.nnz} implicit feedback interactions.\")\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3. Joint 2D t-SNE Manifold Projection\n",
+    "\n",
+    "To analyze latent manifold deformation without artificial coordinate system shifts, we apply **Reflection-Corrected Orthogonal Procrustes** alignment on $V_t$ relative to $V_0$, followed by a **joint t-SNE embedding** on $[V_0; V_{\\text{final}}]$."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 4. Visual 1: Popularity Gravity Attractors & Drift Vectors\n",
+    "\n",
+    "The 2D t-SNE projection maps all 3,533 catalog items at Generation $t=0$ (left) and Generation $t=9$ (right). Red vector arrows trace the displacement trajectories of the top 50 most viral items."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "pop_drift_path = '../docs/images/phase_5_lightgcn/tsne_popularity_drift.png'\n",
+    "if os.path.exists(pop_drift_path):\n",
+    "    display(IPImage(filename=pop_drift_path, width=950))\n",
+    "else:\n",
+    "    print('Asset not found at', pop_drift_path)\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 5. Visual 2: Primary Movie Genre Cluster Blurring\n",
+    "\n",
+    "How does graph propagation affect genre identity? In LightGCN, items that share co-consumption edges blend their representations across multiple hops. As the feedback loop progresses, genre boundaries soften in favor of a monolithic \"popularity super-cluster.\""
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "genre_img_path = '../docs/images/phase_5_lightgcn/tsne_genre_clusters.png'\n",
+    "if os.path.exists(genre_img_path):\n",
+    "    display(IPImage(filename=genre_img_path, width=950))\n",
+    "else:\n",
+    "    print('Asset not found at', genre_img_path)\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 6. Visual 3: Latent Space Density Compression (KDE)\n",
+    "\n",
+    "2D Kernel Density Estimation (KDE) contour mapping comparing factor space dispersion at $t=0$ (blue) versus $t=9$ (green). LightGCN displays the most extreme density singularity among all studied algorithms."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "density_img_path = '../docs/images/phase_5_lightgcn/tsne_manifold_density.png'\n",
+    "if os.path.exists(density_img_path):\n",
+    "    display(IPImage(filename=density_img_path, width=950))\n",
+    "else:\n",
+    "    print('Asset not found at', density_img_path)\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 7. Dynamic 50-Generation Latent Trajectory Animations\n",
+    "\n",
+    "Below are two synchronized 50-frame animated sequences capturing continuous closed-loop bias propagation over 50 generations ($t=0 \\to 49$).\n",
+    "\n",
+    "### Animation 1: Dynamic Manifold Drift alongside Live Gini & Effective Rank\n",
+    "- **Left**: Continuous 2D manifold trajectory with red tracking paths for the top 30 viral movies.\n",
+    "- **Top Right**: Live tracking of Catalog Exposure Gini ($G$).\n",
+    "- **Bottom Right**: Live tracking of Latent Manifold Effective Rank ($S_{\\text{eff}}$)."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "gif1_path = '../docs/images/phase_5_lightgcn/embedding_drift_trajectory.gif'\n",
+    "if os.path.exists(gif1_path):\n",
+    "    display(IPImage(filename=gif1_path, width=900))\n",
+    "else:\n",
+    "    print('Animation asset not found at', gif1_path)\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Animation 2: 32-D Quantitative Metric Trajectories across Popularity Tiers\n",
+    "Tracks exact mathematical measurements computed directly in $\\mathbb{R}^{32}$ across:\n",
+    "- **Short-tail items** ($\\ge 250$ interactions, orange)\n",
+    "- **Mid-tail items** ($50 - 249$ interactions, purple)\n",
+    "- **Long-tail items** ($< 50$ interactions, green)\n",
+    "\n",
+    "Panels monitor:\n",
+    "1. **Mean Euclidean Drift ($\\bar{d}_{\\text{Euc}}$)**: True straight-line physical displacement after Procrustes alignment.\n",
+    "2. **Mean Cosine Drift ($\\bar{d}_{\\text{Cos}}$)**: Pure angular rotation ($1 - \\cos \\theta$).\n",
+    "3. **Mean Vector L2 Norm ($\\bar{\\|\\mathbf{v}\\|}_2$)**: Vector magnitude expansion."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "gif2_path = '../docs/images/phase_5_lightgcn/quantitative_embedding_drift_trajectory.gif'\n",
+    "if os.path.exists(gif2_path):\n",
+    "    display(IPImage(filename=gif2_path, width=900))\n",
+    "else:\n",
+    "    print('Animation asset not found at', gif2_path)\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 8. Theoretical Synthesis & The Graph Centrality Hypothesis\n",
+    "\n",
+    "### Summary of Findings:\n",
+    "1. **Graph Structural Amplification**: LightGCN's $D^{-1/2} A D^{-1/2}$ normalisation allocates stronger message-passing weights to high-degree items. Popular items act as geometric attractors, pulling neighboring embeddings toward them in latent space.\n",
+    "2. **The High-Accuracy Paradox**: LightGCN achieves higher initial accuracy ($NDCG@10$) at generation $t=0$, but compounds inequality faster than Matrix Factorization and BPR.\n",
+    "3. **Structural Debiasing Requirement**: Non-graph interventions (such as inverse propensity weighting on clicks alone) are insufficient for graph models; debiasing must operate directly on the graph adjacency normalisation."
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbformat": 4,
+   "nbformat_minor": 2,
+   "pygments_lexer": "ipython3",
+   "version": "3.12.15"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
+
+with open("notebooks/phase_5_lightgcn.ipynb", "w") as f:
+    json.dump(notebook, f, indent=1)
+
+print("Created notebooks/phase_5_lightgcn.ipynb successfully!")
