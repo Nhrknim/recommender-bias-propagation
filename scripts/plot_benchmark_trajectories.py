@@ -1,12 +1,12 @@
 """
-plot_benchmark_from_json.py
-───────────────────────────
+plot_benchmark_trajectories.py
+───────────────────────────────
 Reads the most recent benchmark JSON produced by run_full_benchmark.py and
 generates benchmark_trajectories_lightgcn.png from REAL measured data.
 
 Usage:
-    python scripts/plot_benchmark_from_json.py
-    python scripts/plot_benchmark_from_json.py --json docs/benchmarks/<run_id>.json
+    python scripts/plot_benchmark_trajectories.py
+    python scripts/plot_benchmark_trajectories.py --json docs/benchmarks/<run_id>.json
 """
 import argparse
 import glob
@@ -103,6 +103,14 @@ def plot(data, out_path):
     plt.savefig(out_path, dpi=200, bbox_inches="tight")
     plt.close()
     print(f"[OK] Saved real-data benchmark plot → {out_path}")
+
+    # Synchronize to phase 4 visualization directory
+    import shutil
+    phase4_path = "docs/images/phase_4_tsne_visualization/benchmark_trajectories.png"
+    if os.path.abspath(out_path) != os.path.abspath(phase4_path):
+        os.makedirs(os.path.dirname(phase4_path), exist_ok=True)
+        shutil.copyfile(out_path, phase4_path)
+        print(f"[OK] Synced copy → {phase4_path}")
 
 
 def main():

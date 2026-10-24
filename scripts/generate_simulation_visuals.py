@@ -26,7 +26,7 @@ from src.metrics.geometry import (
     compute_effective_rank,
     compute_drift_metrics_32d,
 )
-from scripts.plot_benchmark_from_json import find_latest_json, plot as plot_benchmark
+from scripts.plot_benchmark_trajectories import find_latest_json, plot as plot_benchmark
 
 OUTPUT_DIR = "docs/images/phase_5_lightgcn"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
