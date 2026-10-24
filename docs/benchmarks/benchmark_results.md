@@ -43,3 +43,26 @@
 | Bayesian Personalized Ranking (BPR) | 31.8692 | 31.8410 | 31.8456 | 31.8613 | 31.8525 | 31.8803 | 31.8270 | 31.8051 | 31.7867 | 31.7799 |
 | Most Popular Baseline (MostPop) | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
 | LightGCN (Graph CF) | 18.1131 | 17.0346 | 16.7679 | 15.8688 | 15.7772 | 15.0215 | 15.0228 | 14.2817 | 14.1655 | 13.6926 |
+
+## Tier 5: Long-Horizon LightGCN Latent Manifold Collapse ($T=50$ Generations)
+
+**Simulation Parameters:** $T=50$ generations ($t=0 \dots 49$), $\alpha=0.8$, $K=10$, MovieLens-1M dataset ($N=3,533$ items).  
+**Source Log:** `docs/benchmarks/lightgcn_50gen_trajectory.json`
+
+| Generation ($t$) | Catalog Gini ($G$) | Effective Rank ($S_{\text{eff}}$) | Short-Tail Drift ($d_{\text{Euc}}$) | Mid-Tail Drift ($d_{\text{Euc}}$) | Long-Tail Drift ($d_{\text{Euc}}$) | Short CosSim | Long CosSim |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| $t=00$ | 0.9949 | 18.14 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| $t=05$ | 0.9915 | 15.06 | 0.305 | 0.217 | 0.201 | 0.027 | 0.569 |
+| $t=10$ | 0.9897 | 13.51 | 0.422 | 0.244 | 0.210 | 0.026 | 0.550 |
+| $t=15$ | 0.9882 | 12.47 | 0.524 | 0.265 | 0.217 | 0.025 | 0.541 |
+| $t=20$ | 0.9871 | 11.58 | 0.639 | 0.292 | 0.224 | 0.023 | 0.538 |
+| $t=25$ | 0.9860 | 10.61 | 0.788 | 0.329 | 0.231 | 0.023 | 0.529 |
+| $t=30$ | 0.9850 | 10.07 | 0.890 | 0.349 | 0.235 | 0.022 | 0.529 |
+| $t=35$ | 0.9842 | 9.59 | 0.984 | 0.365 | 0.239 | 0.022 | 0.531 |
+| $t=40$ | 0.9834 | 9.22 | 1.074 | 0.378 | 0.241 | 0.022 | 0.531 |
+| $t=45$ | 0.9827 | 8.81 | 1.194 | 0.399 | 0.244 | 0.021 | 0.534 |
+| $t=49$ | 0.9822 | 8.63 | 1.245 | 0.402 | 0.244 | 0.021 | 0.538 |
+
+### Key Empirical Findings:
+1. **Continuous Dimensionality Collapse:** Latent space effective rank collapses from $S_{\text{eff}} = 18.14 \to 8.63$, losing over **52.4%** of its representational capacity as graph message-passing concentrates high-degree nodes into a low-dimensional subspace.
+2. **5.1x Asymmetric Drift Velocity:** Short-tail popular items experience strong attractor pulling forces, drifting $1.245$ Euclidean units away from baseline, whereas long-tail items remain largely inert at $0.244$ drift due to minimal structural graph updates.

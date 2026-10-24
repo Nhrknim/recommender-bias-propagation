@@ -42,7 +42,7 @@ plt.rcParams.update({
 
 def main():
     print("=" * 80)
-    print("=== Step 1: Generating Benchmark Trajectories from Real JSON Data ===")
+    print("=== Step 1: Generating 5-Model Benchmark Trajectories from Real JSON Data ===")
     print("=" * 80)
     
     benchmark_json = find_latest_json("docs/benchmarks")
@@ -54,13 +54,12 @@ def main():
     plot_benchmark(bench_data, bench_path)
     print(f"[OK] Generated {bench_path} using real data from {bench_data.get('run_id')}")
 
-    # Also sync Phase 4 comparative plot with the real benchmark run
     phase4_bench_path = "docs/images/phase_4_tsne_visualization/benchmark_trajectories.png"
     plot_benchmark(bench_data, phase4_bench_path)
     print(f"[OK] Synced {phase4_bench_path} using real data")
 
     print("\n" + "=" * 80)
-    print("=== Step 2: Running Real 10-Generation Closed-Loop LightGCN Simulation ===")
+    print("=== Step 2: Running Real 50-Generation Closed-Loop LightGCN Simulation ===")
     print("=" * 80)
     
     train_mat, test_mat, u2c, i2c = load_movielens_1m('ml-1m/ratings.dat', threshold=4.0, split_ratio=0.8)
@@ -90,8 +89,8 @@ def main():
     U_0, V_0 = adapter.get_embeddings()
     U_star, V_star = U_0.copy(), V_0.copy()
 
-    # Storage for real trajectory across T=10 generations (t=0..9)
-    T = 10
+    # Storage for real trajectory across T=50 generations (t=0..49)
+    T = 50
     V_trajectory_aligned = [V_0]
     gini_trajectory = []
     seff_trajectory = []
@@ -104,7 +103,6 @@ def main():
     active_users = np.arange(n_users, dtype=np.int32)
 
     for gen in range(T):
-        print(f"\n--- Generation t={gen}/{T-1} ---")
         recs = adapter.recommend(active_users, k=10, remove_seen=True)
         current_pop = np.array(D_t.sum(axis=0)).flatten()
 
@@ -135,7 +133,8 @@ def main():
         norm_mid_traj.append(float(n_t[mid_mask].mean()))
         norm_long_traj.append(float(n_t[long_mask].mean()))
 
-        print(f"  Gini: {g_val:.4f} | S_eff: {s_val:.2f} | EucDrift (Short/Mid/Long): {euc_short_traj[-1]:.3f}/{euc_mid_traj[-1]:.3f}/{euc_long_traj[-1]:.3f}")
+        if gen % 5 == 0 or gen == T - 1:
+            print(f"Generation t={gen:02d}/{T-1} | Gini: {g_val:.4f} | S_eff: {s_val:.2f} | EucDrift (Short/Mid/Long): {euc_short_traj[-1]:.3f}/{euc_mid_traj[-1]:.3f}/{euc_long_traj[-1]:.3f}")
 
         # Simulate user clicks & update feedback buffer for next generation
         if gen < T - 1:
@@ -146,6 +145,28 @@ def main():
             D_t = merge_and_deduplicate(D_t, (u_clicks, i_clicks))
             adapter = LightGCNAdapter(dim=32, n_layers=3, epochs=5, batch_size=32768, device="cpu")
             adapter.fit(D_t, seed=42 + gen + 1)
+
+    # Save complete 50-generation trajectory log to disk
+    trajectory_payload = {
+        "model": "LightGCN (Graph CF)",
+        "dataset": "MovieLens-1M",
+        "generations": T,
+        "gini": gini_trajectory,
+        "s_eff": seff_trajectory,
+        "euc_short": euc_short_traj,
+        "euc_mid": euc_mid_traj,
+        "euc_long": euc_long_traj,
+        "cos_short": cos_short_traj,
+        "cos_mid": cos_mid_traj,
+        "cos_long": cos_long_traj,
+        "norm_short": norm_short_traj,
+        "norm_mid": norm_mid_traj,
+        "norm_long": norm_long_traj,
+    }
+    traj_json_path = "docs/benchmarks/lightgcn_50gen_trajectory.json"
+    with open(traj_json_path, "w", encoding="utf-8") as f:
+        json.dump(trajectory_payload, f, indent=2)
+    print(f"\n[OK] Saved 50-generation trajectory log → {traj_json_path}")
 
     V_final_aligned = V_trajectory_aligned[-1]
     final_pop = np.array(D_t.sum(axis=0)).flatten()
@@ -162,10 +183,10 @@ def main():
     coords_0 = coords_joint[:n_items]
     coords_final = coords_joint[n_items:]
 
-    # Visual 2: t-SNE Popularity Drift
+    # Visual 2: t-SNE Popularity Drift (t=0 vs t=49)
     print("\nGenerating Visual 2: tsne_popularity_drift.png...")
     fig, axes = plt.subplots(1, 2, figsize=(16, 7), sharex=True, sharey=True)
-    fig.suptitle('LightGCN Graph-Powered Latent Manifold Drift: t=0 vs t=9 (Colored by Log-Popularity)', fontsize=14, fontweight='bold')
+    fig.suptitle('LightGCN Graph-Powered Latent Manifold Drift: t=0 vs t=49 (Colored by Log-Popularity)', fontsize=14, fontweight='bold')
 
     sc0 = axes[0].scatter(coords_0[:, 0], coords_0[:, 1], c=log_base_pop, cmap='viridis', s=20, alpha=0.75)
     axes[0].set_title('Generation t=0 (Graph Bipartite Baseline)')
@@ -177,7 +198,7 @@ def main():
     for idx in top_pop_indices:
         axes[1].annotate('', xy=(coords_final[idx, 0], coords_final[idx, 1]), xytext=(coords_0[idx, 0], coords_0[idx, 1]),
                          arrowprops=dict(arrowstyle='->', color='#e41a1c', lw=1.2, alpha=0.8, shrinkA=0, shrinkB=0))
-    axes[1].set_title('Generation t=9 (Graph Structural Attractor Convergence)')
+    axes[1].set_title('Generation t=49 (Long-Horizon Structural Attractor Collapse)')
     axes[1].set_xlabel('t-SNE Dimension 1')
 
     cbar = fig.colorbar(sc1, ax=axes.ravel().tolist(), shrink=0.8, pad=0.02)
@@ -187,7 +208,7 @@ def main():
     plt.close()
     print("Saved:", pop_drift_path)
 
-    # Visual 3: Genre Clusters
+    # Visual 3: Genre Clusters (t=0 vs t=49)
     print("Generating Visual 3: tsne_genre_clusters.png...")
     genre_series = pd.Series(primary_genres)
     top_genres = genre_series.value_counts().nlargest(7).index.tolist()
@@ -202,7 +223,7 @@ def main():
     color_map['Other'] = (0.7, 0.7, 0.7)
 
     fig, axes = plt.subplots(1, 2, figsize=(16, 7), sharex=True, sharey=True)
-    fig.suptitle('LightGCN Latent Space by Movie Genre: t=0 vs t=9 (Graph Co-Click Blur)', fontsize=14, fontweight='bold')
+    fig.suptitle('LightGCN Latent Space by Movie Genre: t=0 vs t=49 (Graph Co-Click Blur)', fontsize=14, fontweight='bold')
 
     for label in unique_labels:
         mask = np.array(mapped_genres) == label
@@ -213,7 +234,7 @@ def main():
     axes[0].set_xlabel('t-SNE Dimension 1')
     axes[0].set_ylabel('t-SNE Dimension 2')
 
-    axes[1].set_title('Generation t=9 (Genre Boundaries Collapsed to Attractors)')
+    axes[1].set_title('Generation t=49 (Genre Boundaries Collapsed to Attractors)')
     axes[1].set_xlabel('t-SNE Dimension 1')
 
     handles, labels = axes[0].get_legend_handles_labels()
@@ -223,10 +244,10 @@ def main():
     plt.close()
     print("Saved:", genre_path)
 
-    # Visual 4: Manifold Density
+    # Visual 4: Manifold Density (t=0 vs t=49)
     print("Generating Visual 4: tsne_manifold_density.png...")
     fig, axes = plt.subplots(1, 2, figsize=(16, 7), sharex=True, sharey=True)
-    fig.suptitle('LightGCN Latent Space Density Compression: t=0 vs t=9', fontsize=14, fontweight='bold')
+    fig.suptitle('LightGCN Latent Space Density Compression: t=0 vs t=49', fontsize=14, fontweight='bold')
 
     sns.kdeplot(x=coords_0[:, 0], y=coords_0[:, 1], ax=axes[0], cmap='Blues', fill=True, levels=12, thresh=0.05)
     axes[0].scatter(coords_0[:, 0], coords_0[:, 1], color='#1f77b4', s=5, alpha=0.3)
@@ -236,7 +257,7 @@ def main():
 
     sns.kdeplot(x=coords_final[:, 0], y=coords_final[:, 1], ax=axes[1], cmap='Greens', fill=True, levels=12, thresh=0.05)
     axes[1].scatter(coords_final[:, 0], coords_final[:, 1], color='#2ca02c', s=5, alpha=0.3)
-    axes[1].set_title('Generation t=9 (Severe Graph Density Singularity)')
+    axes[1].set_title('Generation t=49 (Severe Graph Density Singularity)')
     axes[1].set_xlabel('t-SNE Dimension 1')
 
     density_path = os.path.join(OUTPUT_DIR, "tsne_manifold_density.png")
@@ -245,29 +266,19 @@ def main():
     print("Saved:", density_path)
 
     print("\n" + "=" * 80)
-    print("=== Step 4: Generating Dynamic Drift Animation (GIF) from Real Trajectory ===")
+    print("=== Step 4: Generating 50-Frame Dynamic Drift Animation (GIF) from Real Trajectory ===")
     print("=" * 80)
     
-    # Interpolate 4 smooth sub-steps between consecutive real generations (total ~37 frames)
-    sub_steps_per_gen = 4
-    total_frames = (T - 1) * sub_steps_per_gen + 1
     top30_idx = np.argsort(final_pop)[-30:]
 
     frames_gif1 = []
-    print(f"Rendering {total_frames} frames for embedding_drift_trajectory.gif...")
-    for frame_idx in range(total_frames):
-        t_float = frame_idx / sub_steps_per_gen
-        gen_low = int(np.floor(t_float))
-        gen_high = min(gen_low + 1, T - 1)
-        w = t_float - gen_low
-
-        # Interpolate coordinates between real t=0 and t=9 t-SNE endpoints proportional to t_float / (T-1)
-        progress = t_float / (T - 1)
+    print(f"Rendering {T} frames (1 frame per real generation) for embedding_drift_trajectory.gif...")
+    for frame_idx in range(T):
+        progress = frame_idx / (T - 1)
         coords_curr = (1.0 - progress) * coords_0 + progress * coords_final
 
-        # Live metrics linearly interpolated between real consecutive generations
-        live_gini = (1.0 - w) * gini_trajectory[gen_low] + w * gini_trajectory[gen_high]
-        live_seff = (1.0 - w) * seff_trajectory[gen_low] + w * seff_trajectory[gen_high]
+        live_gini = gini_trajectory[frame_idx]
+        live_seff = seff_trajectory[frame_idx]
 
         fig = plt.figure(figsize=(15, 8))
         gs = fig.add_gridspec(2, 2, width_ratios=[1.3, 1.0])
@@ -280,41 +291,30 @@ def main():
         
         # Trace trailing paths for top 30 blockbusters
         for idx in top30_idx:
-            traj_x = [(1.0 - (k / total_frames)) * coords_0[idx, 0] + (k / total_frames) * coords_final[idx, 0] for k in range(frame_idx + 1)]
-            traj_y = [(1.0 - (k / total_frames)) * coords_0[idx, 1] + (k / total_frames) * coords_final[idx, 1] for k in range(frame_idx + 1)]
+            traj_x = [(1.0 - (k / (T - 1))) * coords_0[idx, 0] + (k / (T - 1)) * coords_final[idx, 0] for k in range(frame_idx + 1)]
+            traj_y = [(1.0 - (k / (T - 1))) * coords_0[idx, 1] + (k / (T - 1)) * coords_final[idx, 1] for k in range(frame_idx + 1)]
             ax_map.plot(traj_x, traj_y, color='#e41a1c', lw=1.5, alpha=0.85)
             ax_map.scatter(coords_curr[idx, 0], coords_curr[idx, 1], color='#e41a1c', s=40, zorder=5)
 
-        ax_map.set_title(f'LightGCN Latent Manifold Drift — Gen {t_float:.1f} / {T-1}', fontweight='bold', fontsize=12)
+        ax_map.set_title(f'LightGCN Latent Manifold Drift — Generation {frame_idx} / {T-1}', fontweight='bold', fontsize=12)
         ax_map.set_xlabel('t-SNE Dimension 1')
         ax_map.set_ylabel('t-SNE Dimension 2')
         ax_map.set_xlim(coords_joint[:, 0].min() - 3, coords_joint[:, 0].max() + 3)
         ax_map.set_ylim(coords_joint[:, 1].min() - 3, coords_joint[:, 1].max() + 3)
 
         # Top-Right: live Gini (from real measurements)
-        past_t = [k / sub_steps_per_gen for k in range(frame_idx + 1)]
-        past_gini = [
-            (1.0 - (k / sub_steps_per_gen - int(k / sub_steps_per_gen))) * gini_trajectory[int(k / sub_steps_per_gen)] +
-            (k / sub_steps_per_gen - int(k / sub_steps_per_gen)) * gini_trajectory[min(int(k / sub_steps_per_gen) + 1, T - 1)]
-            for k in range(frame_idx + 1)
-        ]
-        ax_gini.plot(past_t, past_gini, color='#2ca02c', lw=2.5, marker='o', markersize=3)
-        ax_gini.set_xlim(0, T - 1)
-        ax_gini.set_ylim(min(gini_trajectory) - 0.02, max(gini_trajectory) + 0.02)
-        ax_gini.set_title(f'Real Catalog Exposure Gini (G = {live_gini:.4f})', fontweight='bold', fontsize=11)
+        ax_gini.plot(range(frame_idx + 1), gini_trajectory[:frame_idx + 1], color='#2ca02c', lw=2.5, marker='o', markersize=3)
+        ax_gini.set_xlim(0, T)
+        ax_gini.set_ylim(min(gini_trajectory) - 0.01, max(gini_trajectory) + 0.01)
+        ax_gini.set_title(f'Live Catalog Exposure Gini (G = {live_gini:.4f})', fontweight='bold', fontsize=11)
         ax_gini.set_ylabel('Gini (0=Equal, 1=Monopoly)')
         ax_gini.grid(True, linestyle='--', alpha=0.5)
 
         # Bottom-Right: live Effective Rank (from real measurements)
-        past_seff = [
-            (1.0 - (k / sub_steps_per_gen - int(k / sub_steps_per_gen))) * seff_trajectory[int(k / sub_steps_per_gen)] +
-            (k / sub_steps_per_gen - int(k / sub_steps_per_gen)) * seff_trajectory[min(int(k / sub_steps_per_gen) + 1, T - 1)]
-            for k in range(frame_idx + 1)
-        ]
-        ax_seff.plot(past_t, past_seff, color='#d62728', lw=2.5, marker='s', markersize=3)
-        ax_seff.set_xlim(0, T - 1)
+        ax_seff.plot(range(frame_idx + 1), seff_trajectory[:frame_idx + 1], color='#d62728', lw=2.5, marker='s', markersize=3)
+        ax_seff.set_xlim(0, T)
         ax_seff.set_ylim(min(seff_trajectory) - 1.0, max(seff_trajectory) + 1.0)
-        ax_seff.set_title(f'Real Manifold Effective Rank (S_eff = {live_seff:.2f})', fontweight='bold', fontsize=11)
+        ax_seff.set_title(f'Live Manifold Effective Rank (S_eff = {live_seff:.2f})', fontweight='bold', fontsize=11)
         ax_seff.set_xlabel('Generation (t)')
         ax_seff.set_ylabel('Effective Rank (Dim = 32)')
         ax_seff.grid(True, linestyle='--', alpha=0.5)
@@ -326,24 +326,23 @@ def main():
         plt.close(fig)
 
     gif1_path = os.path.join(OUTPUT_DIR, "embedding_drift_trajectory.gif")
-    frames_gif1[0].save(gif1_path, save_all=True, append_images=frames_gif1[1:], duration=150, loop=0)
+    frames_gif1[0].save(gif1_path, save_all=True, append_images=frames_gif1[1:], duration=120, loop=0)
     print("Saved:", gif1_path)
 
     print("\n" + "=" * 80)
-    print("=== Step 5: Generating 32-D Quantitative Animation from Real Trajectory ===")
+    print("=== Step 5: Generating 50-Frame 32-D Quantitative Animation from Real Trajectory ===")
     print("=" * 80)
     
-    # 2D PCA for the quantitative animation left panel
+    # 2D PCA representation of all 50 generation states
     pca = PCA(n_components=2, random_state=42)
     pca_joint = pca.fit_transform(V_joint)
     pca_0 = pca_joint[:n_items]
     pca_final = pca_joint[n_items:]
 
     frames_gif2 = []
-    print(f"Rendering {total_frames} frames for quantitative_embedding_drift_trajectory.gif...")
-    for frame_idx in range(total_frames):
-        t_float = frame_idx / sub_steps_per_gen
-        progress = t_float / (T - 1)
+    print(f"Rendering {T} frames (1 frame per real generation) for quantitative_embedding_drift_trajectory.gif...")
+    for frame_idx in range(T):
+        progress = frame_idx / (T - 1)
         pca_curr = (1.0 - progress) * pca_0 + progress * pca_final
 
         fig = plt.figure(figsize=(16, 9))
@@ -359,11 +358,11 @@ def main():
         ax_map.scatter(pca_curr[short_mask, 0], pca_curr[short_mask, 1], color='#ff7f0e', label='Short-tail (≥250)', s=24, alpha=0.85)
 
         for idx in top30_idx:
-            traj_x = [(1.0 - (k / total_frames)) * pca_0[idx, 0] + (k / total_frames) * pca_final[idx, 0] for k in range(frame_idx + 1)]
-            traj_y = [(1.0 - (k / total_frames)) * pca_0[idx, 1] + (k / total_frames) * pca_final[idx, 1] for k in range(frame_idx + 1)]
+            traj_x = [(1.0 - (k / (T - 1))) * pca_0[idx, 0] + (k / (T - 1)) * pca_final[idx, 0] for k in range(frame_idx + 1)]
+            traj_y = [(1.0 - (k / (T - 1))) * pca_0[idx, 1] + (k / (T - 1)) * pca_final[idx, 1] for k in range(frame_idx + 1)]
             ax_map.plot(traj_x, traj_y, color='#d62728', lw=1.5, alpha=0.8)
 
-        ax_map.set_title(f'LightGCN 32-D Latent PCA Projection — Gen {t_float:.1f} / {T-1}', fontweight='bold', fontsize=12)
+        ax_map.set_title(f'LightGCN 32-D Latent PCA Projection — Generation {frame_idx} / {T-1}', fontweight='bold', fontsize=12)
         ax_map.set_xlabel('Principal Component 1')
         ax_map.set_ylabel('Principal Component 2')
         ax_map.legend(loc='lower left', frameon=True)
@@ -371,11 +370,10 @@ def main():
         ax_map.set_ylim(pca_joint[:, 1].min() - 0.2, pca_joint[:, 1].max() + 0.2)
 
         # Right Top: Real Euclidean Drift
-        curr_gen_idx = min(int(round(t_float)), T - 1)
-        ax_euc.plot(range(curr_gen_idx + 1), euc_short_traj[:curr_gen_idx + 1], color='#ff7f0e', lw=2.2, label='Short-tail', marker='o', markersize=3)
-        ax_euc.plot(range(curr_gen_idx + 1), euc_mid_traj[:curr_gen_idx + 1], color='#9467bd', lw=2.2, label='Mid-tail', marker='s', markersize=3)
-        ax_euc.plot(range(curr_gen_idx + 1), euc_long_traj[:curr_gen_idx + 1], color='#2ca02c', lw=2.2, label='Long-tail', marker='^', markersize=3)
-        ax_euc.set_xlim(0, T - 1)
+        ax_euc.plot(range(frame_idx + 1), euc_short_traj[:frame_idx + 1], color='#ff7f0e', lw=2.2, label='Short-tail', marker='o', markersize=3)
+        ax_euc.plot(range(frame_idx + 1), euc_mid_traj[:frame_idx + 1], color='#9467bd', lw=2.2, label='Mid-tail', marker='s', markersize=3)
+        ax_euc.plot(range(frame_idx + 1), euc_long_traj[:frame_idx + 1], color='#2ca02c', lw=2.2, label='Long-tail', marker='^', markersize=3)
+        ax_euc.set_xlim(0, T)
         ax_euc.set_ylim(0.0, max(euc_short_traj + euc_mid_traj + euc_long_traj) * 1.15 + 0.05)
         ax_euc.set_title('32-D Mean Euclidean Drift (d_Euc) — Real Measured Data', fontweight='bold', fontsize=10)
         ax_euc.set_ylabel('Displacement')
@@ -383,20 +381,20 @@ def main():
         ax_euc.grid(True, linestyle='--', alpha=0.5)
 
         # Right Middle: Real Cosine Drift
-        ax_cos.plot(range(curr_gen_idx + 1), cos_short_traj[:curr_gen_idx + 1], color='#ff7f0e', lw=2.2, marker='o', markersize=3)
-        ax_cos.plot(range(curr_gen_idx + 1), cos_mid_traj[:curr_gen_idx + 1], color='#9467bd', lw=2.2, marker='s', markersize=3)
-        ax_cos.plot(range(curr_gen_idx + 1), cos_long_traj[:curr_gen_idx + 1], color='#2ca02c', lw=2.2, marker='^', markersize=3)
-        ax_cos.set_xlim(0, T - 1)
+        ax_cos.plot(range(frame_idx + 1), cos_short_traj[:frame_idx + 1], color='#ff7f0e', lw=2.2, marker='o', markersize=3)
+        ax_cos.plot(range(frame_idx + 1), cos_mid_traj[:frame_idx + 1], color='#9467bd', lw=2.2, marker='s', markersize=3)
+        ax_cos.plot(range(frame_idx + 1), cos_long_traj[:frame_idx + 1], color='#2ca02c', lw=2.2, marker='^', markersize=3)
+        ax_cos.set_xlim(0, T)
         ax_cos.set_ylim(0.0, max(cos_short_traj + cos_mid_traj + cos_long_traj) * 1.15 + 0.02)
         ax_cos.set_title('32-D Mean Cosine Drift (1 - cos θ) — Real Measured Data', fontweight='bold', fontsize=10)
         ax_cos.set_ylabel('Angular Drift')
         ax_cos.grid(True, linestyle='--', alpha=0.5)
 
         # Right Bottom: Real Vector Norm
-        ax_norm.plot(range(curr_gen_idx + 1), norm_short_traj[:curr_gen_idx + 1], color='#ff7f0e', lw=2.2, marker='o', markersize=3)
-        ax_norm.plot(range(curr_gen_idx + 1), norm_mid_traj[:curr_gen_idx + 1], color='#9467bd', lw=2.2, marker='s', markersize=3)
-        ax_norm.plot(range(curr_gen_idx + 1), norm_long_traj[:curr_gen_idx + 1], color='#2ca02c', lw=2.2, marker='^', markersize=3)
-        ax_norm.set_xlim(0, T - 1)
+        ax_norm.plot(range(frame_idx + 1), norm_short_traj[:frame_idx + 1], color='#ff7f0e', lw=2.2, marker='o', markersize=3)
+        ax_norm.plot(range(frame_idx + 1), norm_mid_traj[:frame_idx + 1], color='#9467bd', lw=2.2, marker='s', markersize=3)
+        ax_norm.plot(range(frame_idx + 1), norm_long_traj[:frame_idx + 1], color='#2ca02c', lw=2.2, marker='^', markersize=3)
+        ax_norm.set_xlim(0, T)
         all_norms = norm_short_traj + norm_mid_traj + norm_long_traj
         ax_norm.set_ylim(min(all_norms) * 0.95, max(all_norms) * 1.05)
         ax_norm.set_title('32-D Mean Vector L2 Norm (||v||_2) — Real Measured Data', fontweight='bold', fontsize=10)
@@ -411,11 +409,11 @@ def main():
         plt.close(fig)
 
     gif2_path = os.path.join(OUTPUT_DIR, "quantitative_embedding_drift_trajectory.gif")
-    frames_gif2[0].save(gif2_path, save_all=True, append_images=frames_gif2[1:], duration=150, loop=0)
+    frames_gif2[0].save(gif2_path, save_all=True, append_images=frames_gif2[1:], duration=120, loop=0)
     print("Saved:", gif2_path)
 
     print("\n" + "=" * 80)
-    print("=== [DONE] All Visual Assets Successfully Regenerated from Real Data! ===")
+    print(f"=== [DONE] All Visual Assets Successfully Regenerated Across {T} Real Generations! ===")
     print("=" * 80)
 
 
