@@ -40,12 +40,12 @@ This directory contains the theoretical foundations, empirical notes, mathematic
 
 ### 5. Phase 5: LightGCN — Graph-Powered Bias Amplification
 * [**phase5_lightgcn.md**](./phase5_lightgcn.md)
-  * Introduction of **LightGCN** as the first graph-based model in the closed-loop simulation.
-  * Explanation of how bipartite degree centrality creates a structural popularity amplification loop absent in MF-family models.
-  * Mathematical derivation of the normalised adjacency propagation ($D^{-1/2}AD^{-1/2}$) and why it favours high-degree nodes.
-  * 4-tier trajectory comparison of LightGCN vs. MF / BPR / MostPop across 10 feedback generations.
-  * t-SNE popularity drift, genre cluster homogenisation, manifold density compression, and 50-generation quantitative drift animations.
-  * Graph Centrality Hypothesis: popular items amplify faster via structural connectivity, not just click frequency.
+  * Introduction of **LightGCN** as the first graph neural recommender in the closed-loop study.
+  * Theoretical validation of the **Graph Centrality Hypothesis**: bipartite degree centrality creates a structural bias engine absent in matrix factorization models.
+  * 5-model benchmark comparison (MF, PMF, BPR, MostPop, LightGCN) with empirical $\pm 1\sigma$ error bands and unified bottom legend.
+  * Deep dive on the **"Illusion of Personalization"**: why LightGCN's macro trajectories (Gini, KL drift, NDCG) track MostPop almost identically in Tiers 1–3, while diverging sharply in Tier 4 latent effective rank collapse ($S_{\text{eff}} = 18.14 \to 8.63$).
+  * Full **50-generation long-horizon simulation** ($t=0 \dots 49$): $52.4\%$ collapse in latent effective rank and $5.1\times$ asymmetric drift velocity ratio (short-tail $1.245$ vs long-tail $0.244$).
+  * 2D t-SNE maps ($t=0$ vs $t=49$), genre cluster homogenisation, KDE density singularity, and two 50-frame dynamic GIFs generated from 100% real measured states.
 
 ### 6. Theoretical Foundations & Closed-Loop Mechanics
 * [**bias_propagation_and_embedding_dynamics.md**](./bias_propagation_and_embedding_dynamics.md)

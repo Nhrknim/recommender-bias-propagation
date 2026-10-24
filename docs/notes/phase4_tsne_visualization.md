@@ -26,8 +26,9 @@ If left unchecked, the algorithm begins to "eat its own tail." It keeps recommen
 * **The Contenders**:
   1. **Most Popular (MostPop)**: A baseline that simply recommends the biggest blockbusters to everyone.
   2. **Matrix Factorization (MF)**: Pointwise collaborative filtering optimizing squared rating prediction error.
-  3. **Bayesian Personalized Ranking (BPR)**: A pairwise ranking model optimizing the relative preference order between clicked and unclicked items.
-  4. **Probabilistic Matrix Factorization (PMF)**: A generative model placing Gaussian priors on user and item latent representations.
+  3. **Probabilistic Matrix Factorization (PMF)**: A generative model placing Gaussian priors on user and item latent representations.
+  4. **Bayesian Personalized Ranking (BPR)**: A pairwise ranking model optimizing the relative preference order between clicked and unclicked items.
+  5. **LightGCN (Graph CF)**: A 3-hop normalized bipartite graph neural recommender operating via neighborhood aggregation.
 
 ---
 
@@ -39,26 +40,32 @@ If left unchecked, the algorithm begins to "eat its own tail." It keeps recommen
 ![4-Tier Benchmark Trajectories](../images/phase_4_tsne_visualization/benchmark_trajectories.png)
 
 #### 1. What You Are Looking At:
-* **The 4 Charts**: Each quadrant tracks one critical health metric of the recommender across the 10 generations ($x$-axis: Generation 0 to 9).
-* **Lines & Colors**:
-  * **Blue**: Matrix Factorization (MF)
-  * **Orange**: Bayesian Personalized Ranking (BPR)
-  * **Purple**: Most Popular Baseline (MostPop)
-  * **Shaded Bands**: Standard deviation across multiple randomized runs (consistency check).
+* **The 4 Charts**: Each quadrant tracks one critical health metric of the recommender across the 10 generations ($x$-axis: Generation 0 to 9) using 100% measured simulation data across 3 random seeds (`[42, 123, 456]`).
+* **Lines & Colors (Unified Bottom Legend)**:
+  * **Dark Blue (`-o`)**: Matrix Factorization (MF)
+  * **Cyan (`-.v`)**: Probabilistic Matrix Factorization (PMF)
+  * **Orange (`-s`)**: Bayesian Personalized Ranking (BPR)
+  * **Purple (`--X`)**: Most Popular Baseline (MostPop)
+  * **Green (`-D`)**: LightGCN (Graph CF)
+  * **Shaded Bands**: $\pm 1\sigma$ empirical standard deviation across randomized seeds.
 
 #### 2. What the Charts Show:
 * **Top-Left (Catalog Exposure Inequality — Gini Index)**:
   * *What it means*: Measures fairness. A score of $1.0$ means all recommendation slots go to a handful of blockbusters; a low score means the catalog is shared evenly.
-  * *Finding*: MostPop is perpetually stuck at extreme inequality ($G \approx 0.99$). Notice how BPR steadily climbs upward over time ($0.53 \to 0.554+$). Even though BPR is a personalized model, the feedback loop steadily forces it to showcase fewer unique movies.
+  * *Finding*: MostPop, LightGCN, and PMF are trapped at extreme exposure inequality ($G \approx 0.99$). Notice how BPR steadily climbs upward over time ($0.5318 \to 0.5544$). Even though BPR is a personalized model, the feedback loop steadily forces it to showcase fewer unique movies. MF maintains a steady intermediate inequality ($G \approx 0.6705 - 0.6836$).
 * **Top-Right (Taste Drift — KL Divergence)**:
   * *What it means*: Measures how far users are nudged away from their true initial movie tastes.
-  * *Finding*: MostPop plummets because it forces all users into the exact same narrow mainstream bucket, stripping away personal individuality.
+  * *Finding*: LightGCN and MostPop plummet ($4.32 \to 2.75 - 2.94$) because graph smoothing and popularity dominance force all users into the exact same narrow mainstream bucket, stripping away personal individuality.
 * **Bottom-Left (Recommendation Accuracy — NDCG@10)**:
   * *What it means*: How accurately the algorithm predicts what users actually want on held-out test data.
-  * *Finding*: MostPop collapses by **over 34%** (from $0.0787$ down to $0.0516$). Recommending only popular hits quickly exhausts user interest and fails to satisfy personal preferences.
+  * *Finding*: LightGCN and MostPop deliver high initial accuracy ($NDCG \approx 0.0787$), but collapse by **over 35%** (falling to $0.0510$) by generation 9. Over-recommending popular hits quickly exhausts catalog novelty and degrades true personalization.
 * **Bottom-Right (Variety of Representation Topics — Effective Rank)**:
   * *What it means*: Measures how many independent "topics" or "dimensions" the model uses to understand movies. If it drops, the model is seeing the world in fewer colors.
-  * *Finding*: MostPop has an effective rank of exactly $1.0$ (it only understands one concept: popularity). BPR steadily loses dimensionality ($31.87 \to 31.78$), proving that the latent space is compressing.
+  * *Finding*: MostPop has an effective rank of exactly $1.0$ (it only understands one concept: popularity). LightGCN rapidly loses dimensionality ($18.11 \to 13.69 \to 8.63$), confirming structural manifold collapse, while MF ($31.95$) and BPR ($31.78$) preserve full representation span.
+
+> [!NOTE]
+> **Key Empirical Takeaway — The Illusion of Personalization:**  
+> Notice that LightGCN and MostPop trace virtually identical paths in Tiers 1, 2, and 3. Because multi-hop graph convolution ($D^{-1/2}AD^{-1/2}$) aggregates information across users, high-degree blockbuster nodes become connected to almost all users after 3 hops. Without explicit degree-debiasing, LightGCN behaviorally degenerates into MostPop in the closed loop, despite learning in a 32-dimensional embedding space.
 
 ---
 
