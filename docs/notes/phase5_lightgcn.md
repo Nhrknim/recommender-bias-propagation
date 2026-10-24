@@ -13,7 +13,7 @@ Every model we studied in Phase 4 (MF, BPR, PMF) gradually amplified the popular
 
 This means popular items have a structural, built-in amplification mechanism that MF-family models don't:
 
-```
+```text
 Popular Item ─────────────────► Many Users
      ▲                                │
      │    (message passing)           │
@@ -43,13 +43,20 @@ The normalisation in LightGCN uses `degree^{-1/2}`:
 This is a structural, mathematical guarantee that popular items dominate the learned embedding space — a phenomenon we call **graph-structural popularity amplification**.
 
 ### 4. The Propagation Equation
+
 The normalised adjacency propagation is:
-$$E^{(l+1)} = D^{-1/2} A D^{-1/2} \, E^{(l)}$$
+
+$$
+E^{(l+1)} = D^{-1/2} A D^{-1/2} E^{(l)}
+$$
 
 Where $A$ is the bipartite adjacency block matrix, $D$ is the degree matrix, and $E^{(l)}$ is the embedding matrix at layer $l$.
 
 The final embedding is the mean over all $L+1$ layers:
-$$E_{\text{final}} = \frac{1}{L+1} \sum_{l=0}^{L} E^{(l)}$$
+
+$$
+E_{\text{final}} = \frac{1}{L+1} \sum_{l=0}^{L} E^{(l)}
+$$
 
 ---
 
@@ -224,6 +231,7 @@ This is a **self-reinforcing structural loop** that non-graph models simply do n
 
 > [!IMPORTANT]
 > LightGCN adds a fundamentally new dimension to bias propagation research:
+>
 > 1. **Graph structure is not neutral**: The bipartite degree distribution mathematically guarantees popular items receive stronger gradient signals — even before any feedback loop begins.
 > 2. **Higher accuracy at t=0 does not mean lower long-term bias**: LightGCN starts with better recommendations but compounds inequality faster.
 > 3. **Structural inequality requires structural intervention**: Degree-normalisation debiasing (adjusting the adjacency weight by inverse popularity) is necessary to break the loop in graph-based models.
