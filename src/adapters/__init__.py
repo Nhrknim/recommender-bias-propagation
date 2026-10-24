@@ -7,6 +7,7 @@ from src.adapters.cornac_adapters import (
     CornacUserKNNAdapter,
     CornacMostPopAdapter,
 )
+from src.adapters.lightgcn_adapter import LightGCNAdapter
 
 __all__ = [
     "BaseRecommenderAdapter",
@@ -15,4 +16,5 @@ __all__ = [
     "CornacPMFAdapter",
     "CornacUserKNNAdapter",
     "CornacMostPopAdapter",
+    "LightGCNAdapter",
 ]
