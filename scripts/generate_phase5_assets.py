@@ -87,8 +87,7 @@ def main():
     ax1.set_title('Tier 1: Catalog Exposure Gini (G) — Inequality', fontweight='bold')
     ax1.set_xlabel('Generation (t)')
     ax1.set_ylabel('Gini Coefficient')
-    ax1.set_ylim(0.50, 1.15)
-    ax1.legend(loc='upper right', ncol=2, frameon=True, facecolor='white', framealpha=0.95, fontsize=8.5)
+    ax1.set_ylim(0.50, 1.02)
     ax1.grid(True, linestyle='--', alpha=0.5)
 
     # Panel 2: KL Divergence
@@ -98,7 +97,6 @@ def main():
     ax2.set_title('Tier 2: User Genre Taste Drift (D_KL)', fontweight='bold')
     ax2.set_xlabel('Generation (t)')
     ax2.set_ylabel('Mean KL Divergence')
-    ax2.legend(loc='upper right', frameon=True, fontsize=9.5)
     ax2.grid(True, linestyle='--', alpha=0.5)
 
     # Panel 3: NDCG@10
@@ -108,7 +106,6 @@ def main():
     ax3.set_title('Tier 3: Accuracy (NDCG@10)', fontweight='bold')
     ax3.set_xlabel('Generation (t)')
     ax3.set_ylabel('NDCG@10')
-    ax3.legend(loc='upper right', frameon=True, fontsize=9.5)
     ax3.grid(True, linestyle='--', alpha=0.5)
 
     # Panel 4: Effective Rank
@@ -118,10 +115,13 @@ def main():
     ax4.set_title('Tier 4: Latent Manifold Effective Rank (S_eff)', fontweight='bold')
     ax4.set_xlabel('Generation (t)')
     ax4.set_ylabel('Effective Rank (Dimensions)')
-    ax4.legend(loc='center right', frameon=True, fontsize=9.5)
     ax4.grid(True, linestyle='--', alpha=0.5)
 
-    plt.tight_layout()
+    handles, labels = ax1.get_legend_handles_labels()
+    fig.legend(handles, labels, loc='lower center', ncol=5, bbox_to_anchor=(0.5, -0.02),
+               frameon=True, fontsize=11, facecolor='white', framealpha=0.95)
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.96])
     bench_path = os.path.join(OUTPUT_DIR, "benchmark_trajectories_lightgcn.png")
     plt.savefig(bench_path, dpi=200, bbox_inches='tight')
     plt.close()
