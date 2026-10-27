@@ -44,7 +44,15 @@ def parse_and_split_dataframe(
     
     # 2. Chronological Per-User Sorting (Prevent temporal data leakage)
     liked_df = liked_df.sort_values(by=[user_col, timestamp_col])
-    
+
+    # 2b. Collapse duplicate (user, item) positives. A user can rate the same
+    # movie more than once; keeping both would double-count degree in LightGCN,
+    # double-sample the pair in BPR, and can leak the pair across train/test.
+    liked_df = liked_df.drop_duplicates(subset=[user_col, item_col], keep="last")
+
+    if len(liked_df) == 0:
+        raise ValueError("No interactions remain after duplicate (user, item) removal")
+
     # 3. Continuous Zero-Indexing Mapping
     user_categories = pd.Categorical(liked_df[user_col])
     item_categories = pd.Categorical(liked_df[item_col])
@@ -65,7 +73,14 @@ def parse_and_split_dataframe(
     
     for user_code, group in liked_df.groupby("user_code"):
         n_interactions = len(group)
-        split_idx = int(n_interactions * split_ratio)
+        # Every user must keep at least one training interaction. Without this,
+        # a user with a single positive (or a very short history) can end up with
+        # zero training rows and break Cornac / produce arbitrary embeddings.
+        if n_interactions == 1:
+            split_idx = 1
+        else:
+            split_idx = max(1, int(n_interactions * split_ratio))
+        split_idx = min(split_idx, n_interactions - (1 if n_interactions > 1 else 0))
         
         user_items = group["item_code"].values
         
@@ -86,12 +101,22 @@ def parse_and_split_dataframe(
         (np.ones(len(test_rows), dtype=np.float32), (test_rows, test_cols)),
         shape=(num_users, num_items)
     )
+
+    # Canonicalise duplicate coordinates and force a strict binary signal.
+    train_matrix.sum_duplicates()
+    test_matrix.sum_duplicates()
+    train_matrix.data[:] = 1.0
+    test_matrix.data[:] = 1.0
     
     # Boundary & Alignment Assertions
     assert train_matrix.shape == test_matrix.shape, "Train and Test matrix dimensions misaligned"
     assert not np.isnan(train_matrix.data).any(), "NaN detected in train matrix"
     assert not np.isnan(test_matrix.data).any(), "NaN detected in test matrix"
-    
+    assert np.all(train_matrix.data == 1.0), "Train matrix is not strictly binary"
+    assert np.all(test_matrix.data == 1.0), "Test matrix is not strictly binary"
+    assert train_matrix.multiply(test_matrix).nnz == 0, "Train/test leakage detected"
+    assert np.all(np.diff(train_matrix.indptr) > 0), "At least one user has no training interactions"
+
     return train_matrix, test_matrix, user2code, item2code
 
 def load_dataset(

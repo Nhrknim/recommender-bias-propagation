@@ -4,6 +4,7 @@ def compute_intrinsic_preference(
     U_star: np.ndarray, 
     V_star: np.ndarray, 
     recs: np.ndarray, 
+    user_indices: np.ndarray,
     tau: float = 1.0
 ) -> np.ndarray:
     """
@@ -15,6 +16,7 @@ def compute_intrinsic_preference(
         U_star: Ground-truth user embedding matrix of shape (|U|, d).
         V_star: Ground-truth item embedding matrix of shape (|I|, d).
         recs: 2D integer array of recommended item indices, shape (N_users, K).
+        user_indices: 1D array of global user indices corresponding to recs rows.
         tau: Temperature scaling parameter (tau > 0).
 
     Returns:
@@ -26,13 +28,17 @@ def compute_intrinsic_preference(
     n_active, k = recs.shape
     d = U_star.shape[1]
 
+    user_indices = np.asarray(user_indices, dtype=np.int64)
+    assert len(user_indices) == n_active, \
+        f"user_indices length {len(user_indices)} does not match recs rows {n_active}"
     assert V_star.shape[1] == d, f"Embedding dimension mismatch: U_star {d} vs V_star {V_star.shape[1]}"
+    if n_active > 0:
+        assert user_indices.max() < U_star.shape[0], "Active user index out of bounds"
 
-    # Vectorized batch indexing across active users and recommended items
-    user_indices = np.repeat(np.arange(n_active, dtype=np.int32), k)
-    item_indices = recs.flatten()
-
-    u_vecs = U_star[user_indices]
+    # Vectorized batch indexing across active users and recommended items.
+    # Padding sentinel -1 is clipped to a valid row and masked to zero below.
+    item_indices = np.clip(recs, 0, V_star.shape[0] - 1).flatten()
+    u_vecs = U_star[np.repeat(user_indices, k)]
     i_vecs = V_star[item_indices]
 
     # Batch dot product
@@ -43,6 +49,7 @@ def compute_intrinsic_preference(
 
     # Numerically stable sigmoid calculation
     p_relevance = 1.0 / (1.0 + np.exp(-scaled_logits))
+    p_relevance[recs < 0] = 0.0
 
     # Invariant assertions
     assert p_relevance.shape == (n_active, k), f"Relevance shape misaligned: {p_relevance.shape}"

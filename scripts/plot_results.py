@@ -77,7 +77,10 @@ def find_best_benchmark_json(benchmark_dir: str = DEFAULT_BENCHMARK_DIR) -> str:
     """
     files = [
         f for f in glob.glob(os.path.join(benchmark_dir, "*.json"))
-        if not f.endswith(".gitkeep") and "lightgcn_50gen" not in os.path.basename(f)
+        if not f.endswith(".gitkeep")
+        and "lightgcn_50gen" not in os.path.basename(f)
+        and "checkpoint" not in os.path.basename(f)
+        and not os.path.basename(f).startswith("lightfm_run_")
     ]
     if not files:
         raise FileNotFoundError(
@@ -94,6 +97,21 @@ def find_best_benchmark_json(benchmark_dir: str = DEFAULT_BENCHMARK_DIR) -> str:
             return 0, 0.0
 
     return max(files, key=_score)
+
+
+def find_lightfm_benchmark_json(benchmark_dir: str = DEFAULT_BENCHMARK_DIR) -> str:
+    """Return the newest Phase 6 LightFM benchmark JSON."""
+    files = sorted(
+        glob.glob(os.path.join(benchmark_dir, "lightfm_run_*.json")),
+        key=os.path.getmtime,
+    )
+    files = [f for f in files if "checkpoint" not in os.path.basename(f)]
+    if not files:
+        raise FileNotFoundError(
+            f"No LightFM benchmark JSON files found in '{benchmark_dir}'.\n"
+            "Run  python scripts/run_lightfm_benchmark.py  first."
+        )
+    return files[-1]
 
 
 def plot_benchmark_trajectories(
@@ -293,7 +311,7 @@ def regenerate_phase4_drift_plots(
     dataset_path: str = DEFAULT_DATASET_PATH,
     output_root: str = DEFAULT_DRIFT_OUTPUT_ROOT,
     models: Sequence[str] = DRIFT_MODEL_KEYS,
-    generations: int = 10,
+    generations: int = 50,
     k: int = 10,
     alpha: float = 0.8,
     seed: int = 42,
@@ -321,6 +339,8 @@ def regenerate_phase4_drift_plots(
     from src.data.buffer import merge_and_deduplicate
     from src.data.dataset import load_movielens_1m
     from src.engine import simulate_user_clicks
+    from src.engine.anchor import build_shared_anchor
+    from src.metrics.geometry import compute_reflection_corrected_procrustes
 
     adapters = _load_drift_adapters()
     unknown = [model for model in models if model not in adapters]
@@ -339,6 +359,9 @@ def regenerate_phase4_drift_plots(
     base_pop = np.asarray(train_mat.sum(axis=0)).flatten()
     print(f"  Users: {n_users:,}  Items: {n_items:,}  nnz: {train_mat.nnz:,}")
 
+    # Model-independent click anchor, shared by every model in this run.
+    U_anchor, V_anchor = build_shared_anchor(train_mat, dim=32, seed=42)
+
     saved_paths: list[str] = []
 
     for model_key in models:
@@ -353,7 +376,6 @@ def regenerate_phase4_drift_plots(
         U_0, V_0 = adapter.get_embeddings()
         if U_0 is None or V_0 is None:
             raise ValueError(f"{model_name} did not return latent embeddings.")
-        U_star, V_star = U_0.copy(), V_0.copy()
 
         D_t = train_mat.copy()
         active_users = np.arange(n_users, dtype=np.int32)
@@ -364,8 +386,9 @@ def regenerate_phase4_drift_plots(
             print(f"  gen {gen:02d}/{generations - 1}")
             if gen < generations - 1:
                 u_clicks, i_clicks = simulate_user_clicks(
-                    recs=recs, U_star=U_star, V_star=V_star,
-                    pop_counts=current_pop, alpha=alpha, tau=1.0, seed=seed + gen,
+                    recs=recs, U_star=U_anchor, V_star=V_anchor,
+                    pop_counts=current_pop, user_indices=active_users,
+                    alpha=alpha, tau=1.0, seed=seed + gen,
                 )
                 D_t = merge_and_deduplicate(D_t, (u_clicks, i_clicks))
                 adapter = adapter_cls(**adapter_kwargs)
@@ -376,8 +399,12 @@ def regenerate_phase4_drift_plots(
             raise ValueError(f"{model_name} did not return final latent embeddings.")
         final_pop = np.asarray(D_t.sum(axis=0)).flatten()
 
+        # t-SNE is not rotation-invariant. Align the final manifold to the
+        # model's own t=0 manifold before stacking the two point clouds.
+        V_final_aligned = compute_reflection_corrected_procrustes(V_0, V_final)
+
         print(f"  Running joint t-SNE on {n_items * 2:,} points...")
-        V_joint = np.vstack([V_0, V_final])
+        V_joint = np.vstack([V_0, V_final_aligned])
         tsne = TSNE(
             n_components=2, perplexity=30.0, random_state=42,
             init="pca", learning_rate="auto", max_iter=1000,
@@ -419,7 +446,7 @@ def _add_drift_args(parser: argparse.ArgumentParser) -> None:
         "--models", nargs="+", choices=DRIFT_MODEL_KEYS, default=list(DRIFT_MODEL_KEYS),
         help="Models to simulate and plot.",
     )
-    parser.add_argument("--generations", type=int, default=10, help="Number of closed-loop generations T.")
+    parser.add_argument("--generations", type=int, default=50, help="Number of closed-loop generations T.")
     parser.add_argument("--k", type=int, default=10, help="Recommendations per user per generation.")
     parser.add_argument("--alpha", type=float, default=0.8, help="Social-conformity weight.")
     parser.add_argument("--seed", type=int, default=42, help="Base random seed.")

@@ -72,6 +72,8 @@ Pairwise:  (u, i_pos, j_neg) ──► Maximize ranking margin:        r̂_ui > 
   $$\nabla_{\mathbf{v}_j} \mathcal{L}_{\text{BPR}} \propto -(1 - \sigma(\hat{x}_{uij}))\mathbf{u}_u + 2\lambda \mathbf{v}_j$$
   Unpopular tail items are repeatedly sampled as unobserved negative items ($j$) across thousands of users. These cumulative negative push gradients drive tail item embeddings out toward the spatial perimeter of the embedding space. While coordinate spread is preserved (preventing origin collapse), tail items become isolated from user vector clusters and are never retrieved in top-$K$ scoring.
 
+  > **Measured caveat (2026-10-27):** In the corrected closed-loop benchmark, standard bias-free BPR does not show a strong periphery-dispersion signature. Its long-tail items stay in a low-popularity, comparatively low-norm band, and the model is popularity-dominated from $t=0$ (see Phase 4). The mechanism above explains what happens to tail items that *are* sampled as negatives, but under implicit feedback many tail items are rarely sampled at all, so this push does not dominate the observed geometry.
+
 ---
 
 ## 3. Geometric Dynamics & Tracking Metrics
@@ -140,11 +142,11 @@ $$P(\text{Click} \mid u, i, \text{rank}) = P(\text{Exposed} \mid \text{rank}) \c
 1. **Position Bias (Exposure):** Logarithmic rank discount modeling user attention:
    $$P(\text{Exposed} \mid \text{rank}) = \frac{1}{\log_2(\text{rank} + 2)}$$
 
-2. **True Relevance:** Sigmoid mapping of ground-truth preference dot products:
-   $$P(\text{Relevance} \mid u, i) = \sigma(\mathbf{u}_u^{*T} \mathbf{v}_i^*) = \frac{1}{1 + \exp(-\mathbf{u}_u^{*T} \mathbf{v}_i^*)}$$
+2. **Intrinsic Relevance:** Temperature-scaled sigmoid over the shared truncated-SVD click anchor $(U^*, V^*)$ built once from $\mathcal{D}_0$:
+   $$P(\text{Relevance} \mid u, i) = \sigma\!\left(\frac{\mathbf{u}_u^{*T} \mathbf{v}_i^*}{\tau \sqrt{d}}\right) = \frac{1}{1 + \exp(-\mathbf{u}_u^{*T} \mathbf{v}_i^* / (\tau \sqrt{d}))}$$
 
-3. **Popularity Conformity ($\alpha$):** Social proof probability driven by global item exposure:
-   $$P(\text{Conformity} \mid i) = \frac{\text{Interactions}_t(i)}{\max_{j} \text{Interactions}_t(j)}$$
+3. **Popularity Conformity ($\alpha$):** Sub-linear social-proof probability driven by global item exposure:
+   $$P(\text{Conformity} \mid i) = \frac{\log\left(1 + \text{Interactions}_t(i)\right)}{\log\left(1 + \max_{j} \text{Interactions}_t(j)\right)}$$
 
 ---
 

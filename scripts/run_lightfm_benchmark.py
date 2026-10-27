@@ -3,6 +3,7 @@ import sys
 import time
 import json
 import uuid
+import subprocess
 from datetime import datetime
 import numpy as np
 
@@ -12,6 +13,29 @@ sys.path.insert(0, ".")
 from src.data.dataset import load_movielens_1m, load_movielens_genres
 from src.adapters.lightfm_adapter import LightFMAdapter
 from src.orchestrator import run_simulation_pipeline
+
+
+def _git_sha() -> str:
+    """Return the current commit SHA (or a marker for a dirty/unavailable tree)."""
+    try:
+        sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL, text=True
+        ).strip()
+        dirty = subprocess.check_output(
+            ["git", "status", "--porcelain"], stderr=subprocess.DEVNULL, text=True
+        ).strip()
+        return f"{sha}-dirty" if dirty else sha
+    except Exception:
+        return "unknown"
+
+
+def _lightfm_backend() -> str:
+    """Report whether the C library or the NumPy fallback is in use."""
+    try:
+        import lightfm  # noqa: F401
+        return "lightfm C library"
+    except ImportError:
+        return "native NumPy fallback (_NativeLightFM)"
 
 
 def main():
@@ -49,9 +73,31 @@ def main():
     ]
 
     seeds = [42, 123, 456]
-    T = 10
+    T = 50
     K = 10
     alpha = 0.8  # Social conformity weight matching repository benchmark standard
+    anchor_dim = 32
+    backend = _lightfm_backend()
+
+    config = {
+        "epochs": 5,
+        "dim": 32,
+        "layers": None,
+        "learning_rate": 0.005,
+        "losses": ["warp", "bpr"],
+        "alpha": alpha,
+        "tau": 1.0,
+        "k": K,
+        "T": T,
+        "seeds": seeds,
+        "anchor_method": "truncated_svd",
+        "anchor_dim": anchor_dim,
+        "dataset": "MovieLens-1M",
+        "train_threshold": 4.0,
+        "split_ratio": 0.8,
+        "backend": backend,
+        "git_sha": _git_sha(),
+    }
 
     benchmark_summary = {}
     raw_results = {}
@@ -92,9 +138,16 @@ def main():
 
     report_lines = []
     report_lines.append("# Closed-Loop LightFM Recommender Bias Benchmark Report\n")
+    report_lines.append(
+        "> **Provisional / supplementary (Phase 6).** LightFM is not part of the "
+        "five-model core benchmark. When the compiled LightFM C library is absent, "
+        f"this run uses the repository's {backend}. Treat cross-library comparisons as indicative only.\n"
+    )
     report_lines.append(f"**Run ID:** `{run_id}`")
     report_lines.append(f"**Dataset:** MovieLens-1M ({n_users:,} users, {n_items:,} items, {genre_matrix.shape[1]} genres)")
-    report_lines.append(f"**Configuration:** T={T} generations, K={K}, alpha={alpha}, seeds={seeds}\n")
+    report_lines.append(f"**Backend:** {backend}")
+    report_lines.append(f"**Configuration:** T={T} generations, K={K}, alpha={alpha}, tau=1.0, seeds={seeds}, anchor=truncated-SVD(d={anchor_dim})")
+    report_lines.append(f"**Git SHA:** `{config['git_sha']}`\n")
 
     table_header = "| Model Architecture | " + " | ".join([f"t={t}" for t in range(T)]) + " |"
     table_divider = "| :--- | " + " | ".join([":---" for _ in range(T)]) + " |"
@@ -109,12 +162,22 @@ def main():
         report_lines.append(row)
 
     report_lines.append("\n## Tier 2: User Genre Taste Drift ($D_{\\text{KL}}$)\n")
+    report_lines.append("Realized click-category drift from the baseline user distribution.\n")
     report_lines.append(table_header)
     report_lines.append(table_divider)
 
     for model_name in benchmark_summary:
         kl_means = benchmark_summary[model_name]["kl_drift"]["mean"]
         row = f"| {model_name} | " + " | ".join([f"{k:.4f}" for k in kl_means]) + " |"
+        report_lines.append(row)
+
+    report_lines.append("\n## Tier 2b: Recommendation-Category Drift ($D_{\\text{KL}}^{\\text{rec}}$)\n")
+    report_lines.append(table_header)
+    report_lines.append(table_divider)
+
+    for model_name in benchmark_summary:
+        rec_kl_means = benchmark_summary[model_name].get("rec_kl", {}).get("mean", [])
+        row = f"| {model_name} | " + " | ".join([f"{k:.4f}" for k in rec_kl_means]) + " |"
         report_lines.append(row)
 
     report_lines.append("\n## Tier 3: Recommendation Accuracy (NDCG@10)\n")
@@ -144,6 +207,15 @@ def main():
         row = f"| {model_name} | " + " | ".join([f"{r:.4f}" for r in rnorm_means]) + " |"
         report_lines.append(row)
 
+    report_lines.append("\n## Tier 3b: Full-Catalog Tie-Aware AUC\n")
+    report_lines.append(table_header)
+    report_lines.append(table_divider)
+
+    for model_name in benchmark_summary:
+        auc_means = benchmark_summary[model_name].get("auc", {}).get("mean", [])
+        row = f"| {model_name} | " + " | ".join([f"{a:.4f}" for a in auc_means]) + " |"
+        report_lines.append(row)
+
     report_content = "\n".join(report_lines)
     print("\n" + report_content)
 
@@ -171,6 +243,8 @@ def main():
             "k": K,
             "alpha": alpha,
             "seeds": seeds,
+            "config": config,
+            "results": benchmark_summary,
             "summary": benchmark_summary
         }, f, indent=2)
 

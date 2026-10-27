@@ -98,6 +98,52 @@ class TestMetrics(unittest.TestCase):
         auc = compute_vectorized_auc(scores, self.test_csr)
         self.assertTrue(0.0 <= auc <= 1.0)
 
+    def test_tier1_metrics_ignore_padding_sentinel(self):
+        """Padding slots (-1) must not alter Gini, coverage, or APLT."""
+        padded = np.hstack([self.recs, np.full((self.n_users, 2), -1, dtype=np.int32)])
+        self.assertAlmostEqual(
+            compute_exposure_gini(padded, self.n_items),
+            compute_exposure_gini(self.recs, self.n_items),
+        )
+        self.assertAlmostEqual(
+            compute_catalog_coverage(padded, self.n_items),
+            compute_catalog_coverage(self.recs, self.n_items),
+        )
+        # APLT normalizes by valid slots, not by the padded width.
+        only_tail = np.array([[9, -1, -1]], dtype=np.int32)
+        only_head = np.array([[0, -1, -1]], dtype=np.int32)
+        self.assertEqual(compute_aplt(only_tail, self.long_tail_mask), 1.0)
+        self.assertEqual(compute_aplt(only_head, self.long_tail_mask), 0.0)
+
+    def test_auc_tie_aware_and_extremes(self):
+        """All-tied scores yield 0.5; perfect and reversed rankings yield 1 and 0."""
+        test = sp.csr_matrix(
+            (np.array([1.0], dtype=np.float32), (np.array([0]), np.array([0]))),
+            shape=(1, 4),
+        )
+        tied = np.zeros((1, 4), dtype=np.float32)
+        perfect = np.array([[3.0, 2.0, 1.0, 0.0]], dtype=np.float32)
+        reversed_scores = np.array([[0.0, 1.0, 2.0, 3.0]], dtype=np.float32)
+
+        self.assertAlmostEqual(compute_vectorized_auc(tied, test), 0.5)
+        self.assertAlmostEqual(compute_vectorized_auc(perfect, test), 1.0)
+        self.assertAlmostEqual(compute_vectorized_auc(reversed_scores, test), 0.0)
+
+    def test_auc_excludes_training_items(self):
+        """Observed training items must be removed from the negative pool."""
+        test = sp.csr_matrix(
+            (np.array([1.0], dtype=np.float32), (np.array([0]), np.array([0]))),
+            shape=(1, 4),
+        )
+        train = sp.csr_matrix(
+            (np.array([1.0], dtype=np.float32), (np.array([0]), np.array([1]))),
+            shape=(1, 4),
+        )
+        # Item 1 is the only item scored above the positive; excluding it makes
+        # the ranking perfect.
+        scores = np.array([[1.0, 9.0, 0.5, 0.0]], dtype=np.float32)
+        self.assertAlmostEqual(compute_vectorized_auc(scores, test, exclude_matrix=train), 1.0)
+
     def test_tier4_geometry_metrics(self):
         """Test Reflection-Corrected Procrustes, R_norm, Mag/Ang decomposition, and S_eff."""
         np.random.seed(42)
@@ -122,6 +168,16 @@ class TestMetrics(unittest.TestCase):
         r_norm = compute_relative_norm_shift(V_0, V_t)
         self.assertEqual(r_norm.shape, (self.n_items,))
         np.testing.assert_allclose(r_norm, 1.0, atol=1e-4)
+
+        # A zero-norm baseline is undefined and must be reported as NaN, not
+        # amplified to a huge finite outlier.
+        V_zero = V_0.copy()
+        V_zero[0] = 0.0
+        V_nonzero = V_t.copy()
+        V_nonzero[0] = 1.0
+        r_zero = compute_relative_norm_shift(V_zero, V_nonzero)
+        self.assertTrue(np.isnan(r_zero[0]))
+        self.assertTrue(np.all(np.isfinite(r_zero[1:])))
 
         # Mag/Ang error decomposition
         d_mag, d_ang = compute_mag_ang_decomposition(V_0, V_t_aligned)

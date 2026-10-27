@@ -49,11 +49,11 @@ When popular items receive disproportionate exposure, models quickly learn that 
 * **What it is:** The memory manager holding interaction matrices and entity ID registers.
 * **Operational Rationale:**
   * *Immutable Zero-Indexing:* If an unpopular indie movie receives zero clicks during generations 2 through 5, standard sparse operations might attempt to drop that movie to compress the matrix. If that happens, row 500 becomes row 480, corrupting all future matrix comparisons. We lock every entity to a permanent coordinate index $i \in [0, |\mathcal{I}|-1]$ that never changes.
-  * *Frozen Ground-Truth Anchor ($U^*, V^*$):* To evaluate whether a user genuinely enjoys a recommended movie, we cannot use the *current* model (which is already biased). Instead, we learn baseline preference vectors at generation 0 ($t=0$) from clean historical data and freeze them as our immutable benchmark of "true human taste".
+  * *Shared Frozen Click Anchor ($U^*, V^*$):* To evaluate whether a user genuinely enjoys a recommended movie, we cannot use the *current* model (which is already biased). Instead, we compute a single truncated-SVD factorisation of the clean baseline matrix $\mathcal{D}_0$, canonicalise its signs, and freeze it as the model-independent anchor for every adapter and seed in the run.
 
 ### Subsystem 2: Architecture-Agnostic Recommender Interface
 * **What it is:** A facade (Adapter Pattern) wrapping recommendation backbones.
-* **Operational Rationale:** The simulation orchestrator must remain agnostic to the underlying algorithm (Matrix Factorization, BPR, or Graph Neural Networks like LightGCN). The interface enforces uniform methods: `.fit()`, `.recommend()`, and `.get_embeddings()`.
+* **Operational Rationale:** The simulation orchestrator must remain agnostic to the underlying algorithm (Matrix Factorization, BPR, or Graph Neural Networks like LightGCN). The interface enforces uniform methods: `.fit()`, `.recommend()`, `.score_all()`, and `.get_embeddings()`. `recommend()` pads unused slots with `-1`, while `score_all()` returns real full-catalog scores for tie-aware AUC.
 
 ### Subsystem 3: Vectorized User Interaction Engine
 * **What it is:** A mathematical simulator modeling human decision-making over exposed recommendation lists.
@@ -68,7 +68,7 @@ When popular items receive disproportionate exposure, models quickly learn that 
 
 ### Subsystem 5: Multi-Seed Simulation Orchestrator
 * **What it is:** The lifecycle manager controlling sequential execution ($t = 0 \to T$), seed sweeps, garbage collection, and disk serialization.
-* **Operational Rationale:** Closed feedback loops are non-linear dynamical systems. A single run could be an outlier caused by early stochastic clicks. Sweeping across $N \ge 5$ random seeds yields mean curves with standard deviation bounds ($\mu \pm \sigma$).
+* **Operational Rationale:** Closed feedback loops are non-linear dynamical systems. A single run could be an outlier caused by early stochastic clicks. Sweeping across multiple random seeds yields mean curves with standard deviation bounds ($\mu \pm \sigma$); the canonical benchmark uses seeds `[42, 123, 456]`.
 
 ---
 

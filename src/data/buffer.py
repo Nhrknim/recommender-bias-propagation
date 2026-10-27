@@ -22,7 +22,15 @@ def merge_and_deduplicate(
     """
     u_idx, i_idx = clicks_coo
     n_users, n_items = D_t.shape
-    
+
+    if len(u_idx) != len(i_idx):
+        raise ValueError("Click user/item arrays must have equal length")
+    if len(u_idx) > 0:
+        if np.any(u_idx < 0) or np.any(u_idx >= n_users):
+            raise ValueError("Click user index out of bounds")
+        if np.any(i_idx < 0) or np.any(i_idx >= n_items):
+            raise ValueError("Click item index out of bounds (padding sentinel -1 must be filtered)")
+
     if len(u_idx) == 0:
         return D_t.copy()
         

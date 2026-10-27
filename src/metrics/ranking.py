@@ -1,6 +1,6 @@
 import numpy as np
 import scipy.sparse as sp
-from typing import Any
+from typing import Any, Optional
 
 def compute_precision_at_k(recs: np.ndarray, test_matrix: sp.csr_matrix, k: int) -> float:
     """
@@ -98,22 +98,40 @@ def compute_ndcg_at_k(recs: np.ndarray, test_matrix: sp.csr_matrix, k: int) -> f
     return float(np.mean(ndcgs)) if len(ndcgs) > 0 else 0.0
 
 
-def compute_vectorized_auc(score_matrix: Any, test_matrix: sp.csr_matrix) -> float:
+def compute_vectorized_auc(
+    score_matrix: Any,
+    test_matrix: sp.csr_matrix,
+    exclude_matrix: Optional[sp.csr_matrix] = None,
+) -> float:
     """
-    Computes exact global Mann-Whitney Pairwise AUC in O(|I| log |I|) time per user.
+    Computes tie-aware global Mann-Whitney Pairwise AUC.
 
-    AUC_u = (RankSum_pos - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg)
+    Positive items are the held-out test interactions. Negatives are every
+    catalog item that is not a test positive and not present in
+    ``exclude_matrix`` (typically the training matrix D_t). Tied scores receive
+    average ranks, which is equivalent to awarding 0.5 credit per tied pair —
+    an all-tied score vector therefore yields exactly 0.5, not 0.0.
 
     Args:
-        score_matrix: Dense 2D array or sparse CSR matrix of predicted item scores, shape (|U|, |I|).
-        test_matrix: Sparse CSR matrix of ground-truth test interactions, shape (|U|, |I|).
+        score_matrix: Dense 2D array or sparse CSR matrix of full-catalog scores,
+            shape (|U|, |I|). Must contain real scores, not a top-K truncation.
+        test_matrix: Sparse CSR matrix of ground-truth test interactions.
+        exclude_matrix: Optional sparse matrix of items to remove from the
+            negative candidate pool (e.g. observed training interactions).
 
     Returns:
-        auc: Mean Mann-Whitney AUC score across active test users [0.0, 1.0].
+        auc: Mean tie-aware AUC across users with at least one positive and one
+            negative candidate [0.0, 1.0].
     """
+    from scipy.stats import rankdata
+
     n_users, n_items = score_matrix.shape
+    if test_matrix.shape != (n_users, n_items):
+        raise ValueError("score_matrix and test_matrix shapes must match")
+
     auc_scores = []
     is_sparse = sp.issparse(score_matrix)
+    all_items = np.arange(n_items)
 
     for u in range(n_users):
         pos_items = test_matrix[u].indices
@@ -121,15 +139,33 @@ def compute_vectorized_auc(score_matrix: Any, test_matrix: sp.csr_matrix) -> flo
         if n_pos == 0 or n_pos == n_items:
             continue
 
-        n_neg = n_items - n_pos
-        scores = score_matrix[u].toarray().ravel() if is_sparse else score_matrix[u]
+        scores = score_matrix[u].toarray().ravel() if is_sparse else np.asarray(score_matrix[u]).ravel()
 
-        # Vectorized rank sorting (1-indexed ranks)
-        ranks = np.argsort(np.argsort(scores)) + 1
-        pos_rank_sum = np.sum(ranks[pos_items])
+        if exclude_matrix is not None:
+            excluded = exclude_matrix[u].indices
+            keep = np.ones(n_items, dtype=bool)
+            keep[excluded] = False
+            # A test positive must never be excluded by upstream leakage.
+            keep[pos_items] = True
+            candidate_scores = scores[keep]
+            pos_mask = np.isin(all_items[keep], pos_items)
+        else:
+            candidate_scores = scores
+            pos_mask = np.zeros(n_items, dtype=bool)
+            pos_mask[pos_items] = True
 
-        auc_u = (pos_rank_sum - (n_pos * (n_pos + 1.0)) / 2.0) / (n_pos * n_neg)
-        auc_scores.append(auc_u)
+        n_candidates = len(candidate_scores)
+        n_pos_c = int(pos_mask.sum())
+        n_neg = n_candidates - n_pos_c
+        if n_pos_c == 0 or n_neg <= 0:
+            continue
+
+        # Average ranks implement the tie correction: tied positives and
+        # negatives each receive the mean rank of their tied block.
+        ranks = rankdata(candidate_scores, method="average")
+        rank_sum = float(np.sum(ranks[pos_mask]))
+        auc_u = (rank_sum - n_pos_c * (n_pos_c + 1.0) / 2.0) / (n_pos_c * n_neg)
+        auc_scores.append(float(np.clip(auc_u, 0.0, 1.0)))
 
     auc_val = float(np.mean(auc_scores)) if len(auc_scores) > 0 else 0.5
     auc_val = float(np.clip(auc_val, 0.0, 1.0))

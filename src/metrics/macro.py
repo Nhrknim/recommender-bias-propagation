@@ -16,8 +16,11 @@ def compute_exposure_gini(recs: np.ndarray, n_items: int) -> float:
     if n_items <= 0:
         raise ValueError(f"Total catalog items n_items must be positive, got {n_items}")
 
-    # Count exposure frequencies per catalog item
-    item_counts = np.bincount(recs.flatten(), minlength=n_items).astype(np.float64)
+    # Count exposure frequencies per catalog item (ignore -1 padding)
+    valid_recs = recs[recs >= 0]
+    if valid_recs.size == 0:
+        return 0.0
+    item_counts = np.bincount(valid_recs, minlength=n_items).astype(np.float64)
     total_exposure = np.sum(item_counts)
 
     if total_exposure == 0.0:
@@ -54,7 +57,7 @@ def compute_catalog_coverage(recs: np.ndarray, n_items: int) -> float:
     if n_items <= 0:
         raise ValueError(f"Total catalog items n_items must be positive, got {n_items}")
 
-    unique_items = np.unique(recs)
+    unique_items = np.unique(recs[recs >= 0])
     coverage = float(len(unique_items) / n_items)
     coverage = float(np.clip(coverage, 0.0, 1.0))
 
@@ -79,11 +82,17 @@ def compute_aplt(recs: np.ndarray, long_tail_mask: np.ndarray) -> float:
     if n_users == 0 or k == 0:
         return 0.0
 
-    # Vectorized boolean lookup of long-tail items in recs
-    is_long_tail = long_tail_mask[recs]
+    # Padding slots (-1) are not recommendations.
+    valid_mask = recs >= 0
+    safe_recs = np.clip(recs, 0, len(long_tail_mask) - 1)
+    is_long_tail = long_tail_mask[safe_recs] & valid_mask
     user_tail_counts = np.sum(is_long_tail, axis=1)
+    user_valid_counts = np.sum(valid_mask, axis=1)
 
-    aplt = float(np.mean(user_tail_counts / float(k)))
+    active = user_valid_counts > 0
+    if not np.any(active):
+        return 0.0
+    aplt = float(np.mean(user_tail_counts[active] / user_valid_counts[active]))
     aplt = float(np.clip(aplt, 0.0, 1.0))
 
     assert 0.0 <= aplt <= 1.0, f"APLT@K out of bounds: {aplt}"

@@ -9,7 +9,7 @@
 
 ## Executive Summary: Why Does Graph Structure Make Bias Worse?
 
-Every model we studied in Phase 4 (MF, BPR, PMF) gradually amplified the popularity of already-popular items. But those models only looked at **who clicked what** — they treated interactions as independent dyadic observations and ignored the high-order network topology connecting users and items.
+The Phase 4 models (MF, PMF, and BPR) all showed strong popularity effects: PMF and BPR stayed near-monopolistic in exposure, while MF's lower Gini masked a near-random ranker. But those models only looked at **who clicked what** — they treated interactions as independent dyadic observations and ignored the high-order network topology connecting users and items.
 
 **LightGCN** changes this fundamentally. It models user-item interactions as a **bipartite graph** $\mathcal{G} = (\mathcal{U} \cup \mathcal{I}, \mathcal{E})$ and propagates latent representations across normalized adjacency edges: popular items broadcast their representations to all connected users, and those users rebroadcast that aggregated signal back to adjacent items.
 
@@ -72,11 +72,12 @@ All benchmarks and longitudinal trajectories are generated from **100% measured 
 | **Epochs per Generation** | 5 | 5 |
 | **Batch Size** | 32,768 (Sparse COO PyTorch CPU) | 32,768 (Sparse COO PyTorch CPU) |
 | **Optimizer** | Adam ($\text{lr} = 10^{-3}$) | Adam ($\text{lr} = 10^{-3}$) |
-| **Feedback Rounds ($T$)** | $T=10$ ($t=0 \dots 9$) | **$T=50$ ($t=0 \dots 49$)** |
+| **Cornac Baselines** | `max_iter=10`, $d=32$ | `max_iter=10`, $d=32$ |
+| **Feedback Rounds ($T$)** | **$T=50$ ($t=0 \dots 49$)** | **$T=50$ ($t=0 \dots 49$)** |
 | **Random Seeds** | `[42, 123, 456]` (Multi-seed $\pm 1\sigma$) | `[42]` |
 | **Social Conformity ($\alpha$)** | 0.8 | 0.8 |
 | **Recommendation Size ($K$)** | 10 | 10 |
-| **Source Benchmark Run** | `run_20261024_230049_7dd7cf` | `lightgcn_50gen_trajectory.json` |
+| **Source Benchmark Run** | `run_20261027_170352_60a757` | `lightgcn_50gen_trajectory.json` |
 
 ---
 
@@ -84,41 +85,41 @@ All benchmarks and longitudinal trajectories are generated from **100% measured 
 
 | Property | Matrix Factorization (MF) | Probabilistic MF (PMF) | Bayesian Personalized Ranking (BPR) | Most Popular (MostPop) | LightGCN (Graph CF) |
 |:---|:---|:---|:---|:---|:---|
-| **Graph Topology** | ❌ None | ❌ None | ❌ None | ❌ None | ✅ Bipartite Graph (3 hops) |
+| **Graph Topology** | None | None | None | None | Bipartite Graph (3 hops) |
 | **Loss Function** | Pointwise MSE | Pointwise + Gaussian Prior | Pairwise BPR | Non-parametric Count | Pairwise BPR |
 | **Negative Sampling** | Implicit Zero | Implicit Zero | Uniform Random | N/A | Uniform Random |
 | **Bias Mechanism** | Gradient Starvation | Prior Anchor Shrinkage | Sampling Disparity | Frequency Monopoly | **Bipartite Degree Centrality** |
-| **Manifold Drift** | Inward radial contraction | Severe rank collapse | Periphery dispersion | Fixed rank $1.0$ | **Attractor Hub Consolidation** |
+| **Manifold Drift** | Inward radial contraction | Severe rank collapse | Stable popularity gradient + radial expansion | Fixed rank $1.0$ | **Attractor Hub Consolidation** |
 
 ---
 
 ## Measured Benchmark Findings (5 Models Across 50 Generations)
 
 ### Visual 1: 4-Tier Benchmark Trajectory Dashboard
-🔗 **Direct Asset Link**: [phase_5_lightgcn/benchmark_trajectories_lightgcn.png](../images/phase_5_lightgcn/benchmark_trajectories_lightgcn.png)
+**Direct Asset Link**: [phase_5_lightgcn/benchmark_trajectories_lightgcn.png](../images/phase_5_lightgcn/benchmark_trajectories_lightgcn.png)
 
 ![LightGCN 4-Tier Benchmark Trajectories](../images/phase_5_lightgcn/benchmark_trajectories_lightgcn.png)
 
-*Figure 1: Measured closed-loop trajectories across all 5 models on MovieLens-1M across 50 generations (Run `run_20261027_122309_2acc8b`, 3 seeds $\pm 1\sigma$). Subplots feature a single unified horizontal legend.*
+*Figure 1: Measured closed-loop trajectories across all 5 models on MovieLens-1M across 50 generations (Run `run_20261027_170352_60a757`, 3 seeds $\pm 1\sigma$). Subplots feature a single unified horizontal legend.*
 
 #### Empirical Findings from Real Simulation Data:
 1. **Tier 1 — Catalog Exposure Gini ($G$):**
-   - **LightGCN** ($G = 0.9949 \to 0.9820$) and **MostPop** ($G = 0.9949 \to 0.9819$) enforce extreme catalog concentration throughout all 50 generations. Bipartite message passing causes top-degree nodes to dominate recommendation scores across virtually all users.
-   - **PMF** also exhibits extreme exposure inequality ($G = 0.9971 \to 0.9942$).
-   - **BPR** demonstrates a runaway bias spiral: starting balanced ($G = 0.5318$), it steadily compounds inequality over time to **$G = 0.9633$** by $t=49$, proving pairwise preference feedback inevitably starves the long-tail under feedback.
-   - **MF** maintains a stable intermediate inequality ($G \approx 0.6819 \to 0.6178$).
+   - **LightGCN** ($G = 0.9949 \to 0.9819$) and **MostPop** ($G = 0.9949 \to 0.9818$) enforce extreme catalog concentration throughout all 50 generations. Bipartite message passing causes top-degree nodes to dominate recommendation scores across virtually all users.
+   - **PMF** also exhibits extreme exposure inequality ($G = 0.9971 \to 0.9944$).
+   - **BPR** is popularity-dominated from $t=0$ under standard bias-free BPR ($G = 0.9949$) and remains extreme ($G = 0.9824$ at $t=49$). The previously reported "balanced" BPR start ($G = 0.5318$) was an artifact of omitted learned biases in scoring, not a real property of pairwise ranking.
+   - **MF** has the lowest inequality ($G = 0.7216 \to 0.6299$), but its AUC is $\approx 0.51$: it is a near-random ranker, so this should not be read as healthy catalog diversity.
 
 2. **Tier 2 — User Taste Drift ($D_{\text{KL}}$):**
-   - **LightGCN** and **MostPop** trigger the most aggressive taste homogenization, dropping from $D_{\text{KL}} = 4.32 \to 2.76$ in early generations, stabilizing around $3.49 - 3.79$. Because graph convolution blends user representations toward popular item neighborhoods, users are rapidly stripped of distinct personal preferences.
-   - **MF** and **BPR** maintain user profile separation ($D_{\text{KL}} \approx 4.95 - 5.29$ and $4.74 - 5.41$, respectively).
+   - This panel plots **realized click-category drift** against each user's baseline genre mix. MF stays highest but declines ($13.15 \to 11.72$), PMF falls furthest overall ($12.49 \to 9.93$), and BPR ($8.77 \to 9.62$), MostPop ($8.97 \to 9.65$), and LightGCN ($8.80 \to 9.78$) all step up at $t=1$ and then plateau. This is click-side drift; recommendation-slate drift is tracked separately as `rec_kl`.
 
 3. **Tier 3 — Accuracy (NDCG@10):**
-   - **LightGCN** starts with the highest ranking accuracy ($NDCG@10 = 0.0785$), tied with MostPop ($0.0787$), benefiting from initial high-degree graph structural alignment.
-   - However, in closed-loop operation, LightGCN's accuracy **collapses by over $62.3\%$** (falling to **$0.0296$** by generation 49) as recommendation lists over-specialize and lose novelty.
+   - **LightGCN** starts with high ranking accuracy ($NDCG@10 = 0.0786$), essentially tied with MostPop ($0.0787$), benefiting from initial high-degree graph structural alignment.
+   - However, in closed-loop operation, LightGCN's accuracy **collapses by $63.4\%$** (falling to **$0.0288$** by generation 49) as recommendation lists over-specialize and lose novelty. MostPop falls $62.6\%$ to $0.0294$, and BPR falls $62.2\%$ ($0.0794 \to 0.0300$). PMF roughly doubles its low baseline ($0.0096 \to 0.0178$); MF remains near zero ($0.0015 \to 0.0031$).
 
 4. **Tier 4 — Latent Manifold Effective Rank ($S_{\text{eff}}$):**
-   - **LightGCN** exhibits severe, continuous dimensional loss, falling from $S_{\text{eff}} = \mathbf{17.96} \to \mathbf{8.45}$ over 50 generations (a $>53\%$ contraction in representation span).
-   - **BPR** contracts from $31.87 \to \mathbf{20.56}$ as popularity super-attractors warp the embedding space.
+   - **LightGCN** exhibits severe, continuous dimensional loss, falling from $S_{\text{eff}} = \mathbf{18.00} \to \mathbf{8.45}$ over 50 generations (a $53.0\%$ contraction in representation span).
+   - **BPR** starts low and contracts further ($3.98 \to \mathbf{2.76}$), consistent with its popularity-dominated geometry.
+   - **PMF** stays near one effective dimension ($1.34 \to 1.20$).
    - **MF** ($S_{\text{eff}} \approx 31.96$) maintains full isotropic rank in 32-D space.
    - **MostPop** represents a trivial 1-dimensional ranking subspace ($S_{\text{eff}} = 1.00$).
 
@@ -154,12 +155,12 @@ While LightGCN and MostPop appear identical in Tiers 1–3, **Tier 4 exposes the
 
 ```
 Effective Rank (S_eff):
-LightGCN:  t=0 (17.96) ────► t=10 (13.43) ────► t=49 (8.45)   [32-D Representation Collapse]
+LightGCN:  t=0 (18.00) ────► t=10 (13.43) ────► t=49 (8.45)   [32-D Representation Collapse]
 MostPop:   t=0 (1.000) ────► t=10 (1.000) ────► t=49 (1.000)  [Strictly 1-Dimensional]
 ```
 
 - **MostPop** is permanently collapsed at $S_{\text{eff}} = 1.000$ because it has no latent parameters—its rankings are strictly 1-dimensional.
-- **LightGCN** begins with a rich 32-dimensional manifold ($S_{\text{eff}} = 17.96$). However, closed-loop feedback progressively destroys over **53% of its representational capacity** ($S_{\text{eff}} \to 8.45$), dragging its latent space toward a low-dimensional singularity.
+- **LightGCN** begins with a rich 32-dimensional manifold ($S_{\text{eff}} = 18.00$). However, closed-loop feedback progressively destroys **53.0% of its representational capacity** ($S_{\text{eff}} \to 8.45$), dragging its latent space toward a low-dimensional singularity.
 
 > [!IMPORTANT]
 > ### Key Takeaway: The "Illusion of Personalization" in Graph Recommenders
@@ -177,24 +178,26 @@ To evaluate the long-term asymptotic behavior of graph-powered recommendation fe
 
 | Generation ($t$) | Catalog Gini ($G$) | Effective Rank ($S_{\text{eff}}$) | Short-Tail Drift ($d_{\text{Euc}}$) | Mid-Tail Drift ($d_{\text{Euc}}$) | Long-Tail Drift ($d_{\text{Euc}}$) | Drift Ratio (Short/Long) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **$t=00$ (Baseline)** | 0.9949 | **6.76** | 0.000 | 0.000 | 0.000 | 1.0× |
-| **$t=05$** | 0.9913 | 6.23 | 0.335 | 0.197 | 0.203 | 1.65× |
-| **$t=10$** | 0.9893 | 5.94 | 0.454 | 0.197 | 0.207 | 2.19× |
-| **$t=15$** | 0.9878 | 5.71 | 0.558 | 0.197 | 0.209 | 2.67× |
-| **$t=20$** | 0.9865 | 5.55 | 0.660 | 0.199 | 0.214 | 3.08× |
-| **$t=25$ (Midpoint)** | 0.9854 | 5.40 | 0.753 | 0.197 | 0.216 | 3.49× |
-| **$t=30$** | 0.9843 | 5.28 | 0.839 | 0.199 | 0.217 | 3.87× |
-| **$t=35$** | 0.9833 | 5.15 | 0.926 | 0.198 | 0.219 | 4.23× |
-| **$t=40$** | 0.9825 | 5.05 | 1.011 | 0.200 | 0.219 | 4.62× |
-| **$t=45$** | 0.9818 | 4.95 | 1.091 | 0.202 | 0.221 | 4.94× |
-| **$t=49$ (Final)** | 0.9812 | **4.87** | **1.155** | 0.203 | **0.221** | **5.23×** |
+| **$t=00$ (Baseline)** | 0.9949 | **17.92** | 0.000 | 0.000 | 0.000 | — |
+| **$t=05$** | 0.9914 | 15.00 | 0.299 | 0.215 | 0.201 | 1.49× |
+| **$t=10$** | 0.9898 | 13.43 | 0.417 | 0.243 | 0.211 | 1.98× |
+| **$t=15$** | 0.9884 | 12.43 | 0.517 | 0.263 | 0.217 | 2.38× |
+| **$t=20$** | 0.9873 | 11.49 | 0.637 | 0.291 | 0.225 | 2.83× |
+| **$t=25$ (Midpoint)** | 0.9861 | 10.49 | 0.791 | 0.331 | 0.234 | 3.39× |
+| **$t=30$** | 0.9850 | 9.95 | 0.897 | 0.352 | 0.238 | 3.76× |
+| **$t=35$** | 0.9841 | 9.45 | 0.995 | 0.371 | 0.243 | 4.10× |
+| **$t=40$** | 0.9833 | 9.08 | 1.090 | 0.386 | 0.246 | 4.44× |
+| **$t=45$** | 0.9825 | 8.64 | 1.218 | 0.411 | 0.250 | 4.88× |
+| **$t=49$ (Final)** | 0.9820 | **8.46** | **1.272** | 0.414 | **0.251** | **5.07×** |
+
+> **Seed note:** This table is the single-seed ($42$) trajectory used by the animation assets. The dashboard in Figure 1 reports 3-seed means, so its $t=0$/$t=49$ Gini and $S_{\text{eff}}$ differ slightly (for example, $S_{\text{eff}} = 18.00 \to 8.45$ across seeds versus $17.92 \to 8.46$ for seed $42$).
 
 ---
 
 ## 2D Latent Manifold Dynamics (t-SNE Projections: $t=0$ vs. $t=49$)
 
 ### Visual 2: Popularity Gravity Attractor Collapse
-🔗 **Direct Asset Link**: [phase_5_lightgcn/tsne_popularity_drift.png](../images/phase_5_lightgcn/tsne_popularity_drift.png)
+**Direct Asset Link**: [phase_5_lightgcn/tsne_popularity_drift.png](../images/phase_5_lightgcn/tsne_popularity_drift.png)
 
 ![t-SNE Popularity Drift (LightGCN)](../images/phase_5_lightgcn/tsne_popularity_drift.png)
 
@@ -202,14 +205,14 @@ To evaluate the long-term asymptotic behavior of graph-powered recommendation fe
 
 #### Measured Empirical Behavior:
 - **Generation $t=0$:** Popular items are already concentrated along high-density graph backbone ridges due to initial multi-hop propagation.
-- **Generation $t=49$:** Top-30 popular items are pulled into dense, monolithic structural attractors. Red displacement arrows show that blockbuster items migrate synchronously across a **1.155 Euclidean distance** toward the high-density attractor core.
-- **Long-tail items (Bottom-30, blue arrows):** In sharp contrast, long-tail items remain pinned at the periphery with a minimal displacement velocity of only $0.221$ (a **$5.23\times$ drift velocity disparity**), remaining frozen in place due to near-zero incoming recommendation exposure.
+- **Generation $t=49$:** Top-30 popular items collapse into a dense, tightly packed attractor at one edge of the projection. Red displacement arrows show blockbusters migrating synchronously across a **1.272 Euclidean distance** into that core.
+- **Long-tail items (Bottom-30, blue arrows):** Long-tail items are pushed toward the opposite, low-density periphery. The blue arrows span large visual distances in the 2D projection, but the underlying 32-D Euclidean drift is only $0.251$ (a **$5.07\times$ disparity**). This mismatch is a t-SNE artifact: the long-tail vectors are small and rotate more in angle (cosine drift $0.522$ vs. $0.020$ for short-tail), so the nonlinear projection exaggerates their apparent movement.
 - **Colorbar Isolation:** The colorbar is positioned cleanly in an independent margin axis ($x=0.90$), ensuring no encroachment or overlap with the scatter plot canvas.
 
 ---
 
 ### Visual 3: Genre Boundary Homogenisation
-🔗 **Direct Asset Link**: [phase_5_lightgcn/tsne_genre_clusters.png](../images/phase_5_lightgcn/tsne_genre_clusters.png)
+**Direct Asset Link**: [phase_5_lightgcn/tsne_genre_clusters.png](../images/phase_5_lightgcn/tsne_genre_clusters.png)
 
 ![Genre Clusters (LightGCN)](../images/phase_5_lightgcn/tsne_genre_clusters.png)
 
@@ -222,7 +225,7 @@ To evaluate the long-term asymptotic behavior of graph-powered recommendation fe
 ---
 
 ### Visual 4: Latent Manifold Density Compression
-🔗 **Direct Asset Link**: [phase_5_lightgcn/tsne_manifold_density.png](../images/phase_5_lightgcn/tsne_manifold_density.png)
+**Direct Asset Link**: [phase_5_lightgcn/tsne_manifold_density.png](../images/phase_5_lightgcn/tsne_manifold_density.png)
 
 ![Manifold Density (LightGCN)](../images/phase_5_lightgcn/tsne_manifold_density.png)
 
@@ -230,45 +233,44 @@ To evaluate the long-term asymptotic behavior of graph-powered recommendation fe
 
 #### Measured Empirical Behavior:
 - At baseline ($t=0$), probability mass is distributed across multiple distinct latent clusters.
-- By generation $t=49$, the probability distribution experiences severe density compression, forming a high-density singularity along the main attractor axis.
+- By generation $t=49$, the probability distribution experiences severe density compression, collapsing into a small number of dense lobes along the main attractor axis while large regions empty out.
 
 ---
 
 ## Longitudinal Animations (50 Frames from Real Generations)
 
 ### Visual 5: 50-Frame Dynamic Drift Trajectory Animation
-🔗 **Direct Asset Link**: [phase_5_lightgcn/embedding_drift_trajectory.gif](../images/phase_5_lightgcn/embedding_drift_trajectory.gif)
+**Direct Asset Link**: [phase_5_lightgcn/embedding_drift_trajectory.gif](../images/phase_5_lightgcn/embedding_drift_trajectory.gif)
 
 - **Frame count**: Exactly 50 frames (1 frame per real generation $t=0 \dots 49$).
 - **Visuals**: Left panel shows continuous 2D manifold migration of items with active red attractor vectors; right panels display real-time tracking of Catalog Gini ($G$) and Latent Effective Rank ($S_{\text{eff}}$).
-- **Observed Dynamic**: $S_{\text{eff}}$ drops steeply in frames $0 \to 15$ ($18.14 \to 12.47$), followed by steady asymptotic convergence to $8.63$ by frame 49.
+- **Observed Dynamic**: $S_{\text{eff}}$ drops steeply in frames $0 \to 15$ ($17.92 \to 12.43$), followed by steady asymptotic convergence to $8.46$ by frame 49.
 
 ---
 
 ### Visual 6: 50-Frame 32-D Quantitative Drift Animation
-🔗 **Direct Asset Link**: [phase_5_lightgcn/quantitative_embedding_drift_trajectory.gif](../images/phase_5_lightgcn/quantitative_embedding_drift_trajectory.gif)
+**Direct Asset Link**: [phase_5_lightgcn/quantitative_embedding_drift_trajectory.gif](../images/phase_5_lightgcn/quantitative_embedding_drift_trajectory.gif)
 
 - **Frame count**: Exactly 50 frames (1 frame per real generation $t=0 \dots 49$).
 - **Tracks**: 32-dimensional Euclidean Drift ($d_{\text{Euc}}$), Cosine Distance ($1 - \cos\theta$), and Vector Norm ($\|v\|_2$) broken down by popularity tier:
-  - **Short-Tail ($\ge 250$ interactions, $527$ items)**: $d_{\text{Euc}}$ surges to **$1.245$**, vector norms inflate, and cosine similarity with initial state drops to $0.021$.
-  - **Mid-Tail ($50 - 249$ interactions, $1,021$ items)**: Moderate drift ($d_{\text{Euc}} = 0.402$).
-  - **Long-Tail ($< 50$ interactions, $1,985$ items)**: Drift flatlines at **$0.244$** ($5.1\times$ lower than short-tail), preserving initial orientation ($\text{CosSim} = 0.538$).
+  - **Short-Tail ($\ge 250$ interactions, $527$ items)**: $d_{\text{Euc}}$ surges to **$1.272$** and mean vector norm inflates from $0.839$ to $2.080$, while cosine similarity with the initial state barely changes ($\text{CosSim} = 0.980$).
+  - **Mid-Tail ($50 - 249$ interactions, $1,021$ items)**: Moderate translation ($d_{\text{Euc}} = 0.414$) and norm growth ($0.451 \to 0.806$).
+  - **Long-Tail ($< 50$ interactions, $1,985$ items)**: Translation is **$0.251$** ($5.07\times$ lower than short-tail), but the direction rotates much more ($\text{CosSim} = 0.478$); norms stay small ($0.198 \to 0.310$).
 
 ---
 
 ## Core Theoretical Takeaways
 
-> [!IMPORTANT]
 > The empirical findings from Phase 5 establish three fundamental principles for recommender systems research:
 >
 > 1. **Graph Normalization is Not Bias-Neutral:**  
 >    Symmetric Laplacian propagation ($D^{-1/2}AD^{-1/2}$) inherently scales signal transmission by node degree. Popular items do not merely win because users click them; they win because the graph architecture acts as an acoustic amplifier for high-degree nodes.
 >
 > 2. **Initial Accuracy Masked Long-Horizon Fragility:**  
->    LightGCN matches the top accuracy at $t=0$ ($NDCG@10 = 0.0786$), but experiences the fastest degradation in the closed loop (falling $35.1\%$ to $0.0510$) as it exhausts catalog discovery and traps users in a singular structural basin.
+>    LightGCN starts near the top accuracy at $t=0$ ($NDCG@10 = 0.0786$), but experiences the fastest degradation in the closed loop (falling $63.4\%$ to $0.0288$) as it exhausts catalog discovery and traps users in a singular structural basin.
 >
-> 3. **The 5.1x Asymmetric Drift Law:**  
->    In closed-loop graph recommenders, representation movement is deeply asymmetric. Popular items accelerate into low-dimensional attractors while 56% of the catalog (long-tail items) experiences complete representational freezing.
+> 3. **The 5.07× Asymmetric Drift Law:**  
+>    In closed-loop graph recommenders, representation movement is deeply asymmetric. Popular items translate $5.07\times$ farther into low-dimensional attractors, while the long-tail $56\%$ of the catalog stays small and poorly constrained: it translates little but rotates more in angle.
 >
 > 4. **The Illusion of Personalization:**  
 >    Without explicit structural debiasing, multi-hop graph collaborative filtering collapses into the Most Popular baseline behaviorally, while silently destroying over half of the latent manifold's effective rank.

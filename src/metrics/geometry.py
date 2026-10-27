@@ -62,12 +62,21 @@ def compute_relative_norm_shift(
 
     Returns:
         r_norm: 1D array of shape (|I|,) with relative norm shift values per item.
+                Entries with a zero baseline norm are NaN and must be excluded
+                from aggregates.
     """
     norms_0 = np.linalg.norm(V_0, axis=1)
     norms_t = np.linalg.norm(V_t, axis=1)
 
-    r_norm = (norms_t + epsilon) / (norms_0 + epsilon)
-    assert not np.isnan(r_norm).any(), "NaN detected in relative norm shift"
+    # Zero-norm baselines make the ratio mathematically undefined. Returning a
+    # NaN (rather than dividing by epsilon) prevents one cold item from
+    # dominating the mean with a ~1e9 outlier.
+    r_norm = np.full(norms_0.shape, np.nan, dtype=np.float64)
+    defined = norms_0 > epsilon
+    r_norm[defined] = (norms_t[defined] + epsilon) / (norms_0[defined] + epsilon)
+
+    assert not np.isnan(r_norm[defined]).any(), "NaN detected in defined relative norm shift"
+    assert np.all(np.isfinite(r_norm[defined])), "Non-finite relative norm shift"
 
     return r_norm.astype(np.float32)
 

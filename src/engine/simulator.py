@@ -1,5 +1,4 @@
 import numpy as np
-import random
 from typing import Tuple
 from src.engine.exposure import compute_position_exposure
 from src.engine.preference import compute_intrinsic_preference
@@ -10,6 +9,7 @@ def simulate_user_clicks(
     U_star: np.ndarray, 
     V_star: np.ndarray, 
     pop_counts: np.ndarray, 
+    user_indices: np.ndarray,
     alpha: float = 0.5, 
     tau: float = 1.0, 
     poisson_lambda: float = 3.0,
@@ -24,40 +24,50 @@ def simulate_user_clicks(
         U_star: Ground-truth user factor anchor matrix, shape (|U|, d).
         V_star: Ground-truth item factor anchor matrix, shape (|I|, d).
         pop_counts: 1D item interaction count array, shape (|I|,).
+        user_indices: 1D global user indices corresponding to recs rows.
         alpha: Weight balancing intrinsic relevance vs social conformity (0.0 <= alpha <= 1.0).
         tau: Temperature scaling for intrinsic preference.
         poisson_lambda: Mean click budget parameter lambda for Poisson distribution.
         seed: Deterministic random seed for reproducibility.
 
     Returns:
-        clicked_u: 1D integer array of active user indices who clicked.
+        clicked_u: 1D integer array of GLOBAL user indices who clicked.
         clicked_i: 1D integer array of global item indices clicked.
     """
     if not (0.0 <= alpha <= 1.0):
         raise ValueError(f"Popularity weight alpha must be in range [0.0, 1.0], got {alpha}")
 
-    # Set deterministic random state
-    np.random.seed(seed)
-    random.seed(seed)
+    # Local generator: avoids mutating global NumPy RNG state.
+    rng = np.random.default_rng(seed)
 
     n_active, k = recs.shape
+    user_indices = np.asarray(user_indices, dtype=np.int64)
+    if len(user_indices) != n_active:
+        raise ValueError(
+            f"user_indices length {len(user_indices)} does not match recs rows {n_active}"
+        )
+    if n_active > 0 and user_indices.max() >= U_star.shape[0]:
+        raise ValueError("Active user index exceeds U_star rows")
 
     # 1. Position Exposure Discount: shape (K,) -> broadcast to (N_active, K)
     p_exposed = compute_position_exposure(k)
 
     # 2. Intrinsic Preference & Conformity: shapes (N_active, K)
-    p_relevance = compute_intrinsic_preference(U_star, V_star, recs, tau=tau)
+    p_relevance = compute_intrinsic_preference(U_star, V_star, recs, user_indices, tau=tau)
     p_conformity = compute_social_conformity(pop_counts, recs)
 
     # 3. Joint Click Probability Matrix: shape (N_active, K)
     p_click = p_exposed * ((1.0 - alpha) * p_relevance + alpha * p_conformity)
+    p_click = np.asarray(p_click, dtype=np.float64)
+    valid = recs >= 0
+    p_click[~valid] = 0.0
 
     # 4. Vectorized Bernoulli Sampling across all (user, rank) pairs
-    rand_vals = np.random.uniform(size=(n_active, k))
-    clicked_mask = rand_vals < p_click
+    rand_vals = rng.random((n_active, k))
+    clicked_mask = (rand_vals < p_click) & valid
 
     # 5. Poisson Session Budgeting per active user
-    budgets = np.random.poisson(lam=poisson_lambda, size=n_active)
+    budgets = rng.poisson(lam=poisson_lambda, size=n_active)
 
     clicked_u, clicked_i = [], []
     for u_idx in range(n_active):
@@ -66,7 +76,7 @@ def simulate_user_clicks(
         if len(items_clicked) > budgets[u_idx]:
             items_clicked = items_clicked[:budgets[u_idx]]
             
-        clicked_u.extend([u_idx] * len(items_clicked))
+        clicked_u.extend([int(user_indices[u_idx])] * len(items_clicked))
         clicked_i.extend(items_clicked)
 
     u_arr = np.array(clicked_u, dtype=np.int32)
@@ -76,5 +86,8 @@ def simulate_user_clicks(
     assert len(u_arr) == len(i_arr), "User and Item click arrays length misaligned"
     assert not np.isnan(u_arr).any(), "NaN detected in clicked user indices"
     assert not np.isnan(i_arr).any(), "NaN detected in clicked item indices"
+    if len(u_arr) > 0:
+        assert np.all(u_arr >= 0) and np.all(u_arr < U_star.shape[0]), "Global user index out of bounds"
+        assert np.all(i_arr >= 0) and np.all(i_arr < V_star.shape[0]), "Item index out of bounds"
 
     return u_arr, i_arr

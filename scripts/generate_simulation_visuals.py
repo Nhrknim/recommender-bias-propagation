@@ -17,6 +17,7 @@ from src.data.dataset import load_movielens_1m
 from src.data.buffer import merge_and_deduplicate
 from src.adapters.lightgcn_adapter import LightGCNAdapter
 from src.engine import simulate_user_clicks
+from src.engine.anchor import build_shared_anchor
 from src.metrics.macro import compute_exposure_gini
 from src.metrics.geometry import (
     compute_reflection_corrected_procrustes,
@@ -83,16 +84,20 @@ def main():
     long_mask = base_pop < 50
     print(f"Catalog items: {n_items} | Short-tail (>=250): {short_mask.sum()}, Mid-tail (50-249): {mid_mask.sum()}, Long-tail (<50): {long_mask.sum()}")
 
+    # Shared, model-independent click anchor (frozen across all generations).
+    print("\nBuilding shared truncated-SVD anchor from D_0...")
+    U_anchor, V_anchor = build_shared_anchor(train_mat, dim=32, seed=42)
+
     # Fit LightGCN at baseline t=0
     print("\nFitting LightGCN at generation t=0 on real interaction matrix D_0...")
-    adapter = LightGCNAdapter(dim=32, n_layers=3, epochs=20, batch_size=32768, device="cpu")
+    adapter = LightGCNAdapter(dim=32, n_layers=3, epochs=5, batch_size=32768, device="cpu")
     adapter.fit(train_mat, seed=42)
     U_0, V_0 = adapter.get_embeddings()
-    U_star, V_star = U_0.copy(), V_0.copy()
+    V_model_0 = V_0.copy()
 
     # Storage for real trajectory across T=50 generations (t=0..49)
     T = 50
-    V_trajectory_aligned = [V_0]
+    V_trajectory_aligned = []
     gini_trajectory = []
     seff_trajectory = []
 
@@ -111,17 +116,16 @@ def main():
         g_val = compute_exposure_gini(recs, n_items)
         gini_trajectory.append(g_val)
 
-        # Real Latent Geometry
+        # Real Latent Geometry (aligned to this model's own t=0 manifold)
         _, V_current = adapter.get_embeddings()
-        V_aligned = compute_reflection_corrected_procrustes(V_0, V_current)
-        if gen > 0:
-            V_trajectory_aligned.append(V_aligned)
+        V_aligned = compute_reflection_corrected_procrustes(V_model_0, V_current)
+        V_trajectory_aligned.append(V_aligned)
 
         s_val = compute_effective_rank(V_aligned)
         seff_trajectory.append(s_val)
 
         # Real 32-D Drift Metrics
-        euc_d, cos_d, n_t, n_0 = compute_drift_metrics_32d(V_0, V_aligned)
+        euc_d, cos_d, n_t, n_0 = compute_drift_metrics_32d(V_model_0, V_aligned)
         euc_short_traj.append(float(euc_d[short_mask].mean()))
         euc_mid_traj.append(float(euc_d[mid_mask].mean()))
         euc_long_traj.append(float(euc_d[long_mask].mean()))
@@ -140,17 +144,30 @@ def main():
         # Simulate user clicks & update feedback buffer for next generation
         if gen < T - 1:
             u_clicks, i_clicks = simulate_user_clicks(
-                recs=recs, U_star=U_star, V_star=V_star, pop_counts=current_pop,
-                alpha=0.8, tau=1.0, seed=42 + gen
+                recs=recs, U_star=U_anchor, V_star=V_anchor, pop_counts=current_pop,
+                user_indices=active_users, alpha=0.8, tau=1.0, seed=42 + gen
             )
             D_t = merge_and_deduplicate(D_t, (u_clicks, i_clicks))
-            adapter = LightGCNAdapter(dim=32, n_layers=3, epochs=20, batch_size=32768, device="cpu")
+            adapter = LightGCNAdapter(dim=32, n_layers=3, epochs=5, batch_size=32768, device="cpu")
             adapter.fit(D_t, seed=42 + gen + 1)
 
     # Save complete 50-generation trajectory log to disk
     trajectory_payload = {
         "model": "LightGCN (Graph CF)",
         "dataset": "MovieLens-1M",
+        "run_config": {
+            "generations": T,
+            "epochs": 5,
+            "dim": 32,
+            "n_layers": 3,
+            "batch_size": 32768,
+            "alpha": 0.8,
+            "tau": 1.0,
+            "k": 10,
+            "anchor_method": "truncated_svd",
+            "anchor_dim": int(U_anchor.shape[1]),
+            "seed": 42,
+        },
         "generations": T,
         "gini": gini_trajectory,
         "s_eff": seff_trajectory,
@@ -261,14 +278,22 @@ def main():
     print("\n" + "=" * 80)
     print("=== Step 4: Generating 50-Frame Dynamic Drift Animation (GIF) from Real Trajectory ===")
     print("=" * 80)
-    
+
+    # One PCA basis fitted on every measured generation, so each frame is the
+    # true t-th manifold projected into a common 2D coordinate system. Do not
+    # interpolate between t=0 and t=T-1: intermediate geometry is measured.
+    V_all_generations = np.vstack(V_trajectory_aligned)
+    pca_all = PCA(n_components=2, random_state=42)
+    pca_all.fit(V_all_generations)
+    pca_trajectory = [pca_all.transform(V) for V in V_trajectory_aligned]
+    pca_all_coords = np.vstack(pca_trajectory)
+
     top30_idx = np.argsort(final_pop)[-30:]
 
     frames_gif1 = []
     print(f"Rendering {T} frames (1 frame per real generation) for embedding_drift_trajectory.gif...")
     for frame_idx in range(T):
-        progress = frame_idx / (T - 1)
-        coords_curr = (1.0 - progress) * coords_0 + progress * coords_final
+        coords_curr = pca_trajectory[frame_idx]
 
         live_gini = gini_trajectory[frame_idx]
         live_seff = seff_trajectory[frame_idx]
@@ -284,16 +309,16 @@ def main():
         
         # Trace trailing paths for top 30 blockbusters
         for idx in top30_idx:
-            traj_x = [(1.0 - (k / (T - 1))) * coords_0[idx, 0] + (k / (T - 1)) * coords_final[idx, 0] for k in range(frame_idx + 1)]
-            traj_y = [(1.0 - (k / (T - 1))) * coords_0[idx, 1] + (k / (T - 1)) * coords_final[idx, 1] for k in range(frame_idx + 1)]
+            traj_x = [pca_trajectory[k][idx, 0] for k in range(frame_idx + 1)]
+            traj_y = [pca_trajectory[k][idx, 1] for k in range(frame_idx + 1)]
             ax_map.plot(traj_x, traj_y, color='#e41a1c', lw=1.5, alpha=0.85)
             ax_map.scatter(coords_curr[idx, 0], coords_curr[idx, 1], color='#e41a1c', s=40, zorder=5)
 
-        ax_map.set_title(f'LightGCN Latent Manifold Drift — Generation {frame_idx} / {T-1}', fontweight='bold', fontsize=12)
-        ax_map.set_xlabel('t-SNE Dimension 1')
-        ax_map.set_ylabel('t-SNE Dimension 2')
-        ax_map.set_xlim(coords_joint[:, 0].min() - 3, coords_joint[:, 0].max() + 3)
-        ax_map.set_ylim(coords_joint[:, 1].min() - 3, coords_joint[:, 1].max() + 3)
+        ax_map.set_title(f'LightGCN Measured Latent Manifold Drift — Generation {frame_idx} / {T-1}', fontweight='bold', fontsize=12)
+        ax_map.set_xlabel('Principal Component 1')
+        ax_map.set_ylabel('Principal Component 2')
+        ax_map.set_xlim(pca_all_coords[:, 0].min() - 0.5, pca_all_coords[:, 0].max() + 0.5)
+        ax_map.set_ylim(pca_all_coords[:, 1].min() - 0.5, pca_all_coords[:, 1].max() + 0.5)
 
         # Top-Right: live Gini (from real measurements)
         ax_gini.plot(range(frame_idx + 1), gini_trajectory[:frame_idx + 1], color='#2ca02c', lw=2.5, marker='o', markersize=3)
@@ -325,18 +350,12 @@ def main():
     print("\n" + "=" * 80)
     print("=== Step 5: Generating 50-Frame 32-D Quantitative Animation from Real Trajectory ===")
     print("=" * 80)
-    
-    # 2D PCA representation of all 50 generation states
-    pca = PCA(n_components=2, random_state=42)
-    pca_joint = pca.fit_transform(V_joint)
-    pca_0 = pca_joint[:n_items]
-    pca_final = pca_joint[n_items:]
 
+    # Reuse the PCA basis fitted on every measured generation above.
     frames_gif2 = []
     print(f"Rendering {T} frames (1 frame per real generation) for quantitative_embedding_drift_trajectory.gif...")
     for frame_idx in range(T):
-        progress = frame_idx / (T - 1)
-        pca_curr = (1.0 - progress) * pca_0 + progress * pca_final
+        pca_curr = pca_trajectory[frame_idx]
 
         fig = plt.figure(figsize=(16, 9))
         gs = fig.add_gridspec(3, 2, width_ratios=[1.2, 1.0])
@@ -351,16 +370,16 @@ def main():
         ax_map.scatter(pca_curr[short_mask, 0], pca_curr[short_mask, 1], color='#ff7f0e', label='Short-tail (≥250)', s=24, alpha=0.85)
 
         for idx in top30_idx:
-            traj_x = [(1.0 - (k / (T - 1))) * pca_0[idx, 0] + (k / (T - 1)) * pca_final[idx, 0] for k in range(frame_idx + 1)]
-            traj_y = [(1.0 - (k / (T - 1))) * pca_0[idx, 1] + (k / (T - 1)) * pca_final[idx, 1] for k in range(frame_idx + 1)]
+            traj_x = [pca_trajectory[k][idx, 0] for k in range(frame_idx + 1)]
+            traj_y = [pca_trajectory[k][idx, 1] for k in range(frame_idx + 1)]
             ax_map.plot(traj_x, traj_y, color='#d62728', lw=1.5, alpha=0.8)
 
         ax_map.set_title(f'LightGCN 32-D Latent PCA Projection — Generation {frame_idx} / {T-1}', fontweight='bold', fontsize=12)
         ax_map.set_xlabel('Principal Component 1')
         ax_map.set_ylabel('Principal Component 2')
         ax_map.legend(loc='lower left', frameon=True)
-        ax_map.set_xlim(pca_joint[:, 0].min() - 0.2, pca_joint[:, 0].max() + 0.2)
-        ax_map.set_ylim(pca_joint[:, 1].min() - 0.2, pca_joint[:, 1].max() + 0.2)
+        ax_map.set_xlim(pca_all_coords[:, 0].min() - 0.2, pca_all_coords[:, 0].max() + 0.2)
+        ax_map.set_ylim(pca_all_coords[:, 1].min() - 0.2, pca_all_coords[:, 1].max() + 0.2)
 
         # Right Top: Real Euclidean Drift
         ax_euc.plot(range(frame_idx + 1), euc_short_traj[:frame_idx + 1], color='#ff7f0e', lw=2.2, label='Short-tail', marker='o', markersize=3)

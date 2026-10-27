@@ -5,6 +5,7 @@ import numpy as np
 import scipy.sparse as sp
 
 from src.data.buffer import merge_and_deduplicate
+from src.engine.anchor import build_shared_anchor
 from src.engine.simulator import simulate_user_clicks
 from src.orchestrator.seed_control import set_deterministic_seed
 from src.metrics import (
@@ -39,6 +40,30 @@ def _compute_baseline_user_dist(
     )
 
 
+def _category_distribution_from_pairs(
+    user_ids: np.ndarray,
+    item_ids: np.ndarray,
+    n_users: int,
+    n_items: int,
+    item_category_matrix: np.ndarray,
+    fallback: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Build per-user category distributions from clicked (user, item) pairs."""
+    n_categories = item_category_matrix.shape[1]
+    if len(item_ids) == 0:
+        return fallback.copy(), np.zeros(n_users, dtype=bool)
+
+    click_matrix = sp.csr_matrix(
+        (np.ones(len(item_ids), dtype=np.float32), (user_ids, item_ids)),
+        shape=(n_users, n_items),
+    )
+    counts = np.asarray(click_matrix.dot(item_category_matrix), dtype=np.float64)
+    row_sums = counts.sum(axis=1, keepdims=True)
+    dist = np.where(row_sums > 0, counts / np.maximum(row_sums, 1e-9), fallback)
+    has_click = np.bincount(user_ids, minlength=n_users) > 0
+    return dist, has_click
+
+
 def _run_single_seed(
     seed: int,
     adapter_cls: Type[Any],
@@ -53,6 +78,8 @@ def _run_single_seed(
     cohorts: Dict[str, np.ndarray],
     base_user_dist: np.ndarray,
     item_category_matrix: np.ndarray,
+    U_anchor: np.ndarray,
+    V_anchor: np.ndarray,
 ) -> Dict[str, List[float]]:
     """Executes a single simulation trajectory for one seed."""
     set_deterministic_seed(seed)
@@ -66,34 +93,31 @@ def _run_single_seed(
     model_adapter = adapter_cls(**kwargs)
     model_adapter.fit(D_t, seed=seed)
 
-    U_star, V_star = model_adapter.get_embeddings()
-    if U_star is None or V_star is None:
-        rng = np.random.default_rng(seed)
-        dim = getattr(model_adapter, "dim", 32)
-        U_star = rng.standard_normal((n_users, dim), dtype=np.float32)
-        V_star = rng.standard_normal((n_items, dim), dtype=np.float32)
+    # Geometry baseline: the model's own t=0 manifold. This is deliberately
+    # separate from the shared click anchor (U_anchor/V_anchor), which is
+    # model-independent and frozen for the whole run.
+    _, V_model_0 = model_adapter.get_embeddings()
 
     seed_metrics: Dict[str, List[float]] = {
         "gini": [], "coverage": [], "aplt": [],
-        "kl_drift": [], "subgroup_gap": [],
+        "kl_drift": [], "rec_kl": [], "subgroup_gap": [],
         "precision": [], "recall": [], "ndcg": [], "auc": [],
-        "r_norm": [], "s_eff": []
+        "r_norm": [], "r_norm_mean": [], "r_norm_valid_frac": [], "s_eff": []
     }
-
-    rank_weights = np.linspace(1.0, 0.1, num=k, dtype=np.float32)
-    user_rows = np.repeat(np.arange(n_users), k)
 
     for t in range(T):
         # 1. Recommendations
         recs = model_adapter.recommend(active_users, k=k, remove_seen=True)
+        assert recs.shape == (n_users, k), f"Recommendation shape misaligned: {recs.shape}"
 
-        # 2. Vectorized User Interaction Simulation
+        # 2. Vectorized User Interaction Simulation (global user coordinates)
         pop_counts = np.asarray(D_t.sum(axis=0)).flatten()
         u_clicks, i_clicks = simulate_user_clicks(
             recs=recs,
-            U_star=U_star,
-            V_star=V_star,
+            U_star=U_anchor,
+            V_star=V_anchor,
             pop_counts=pop_counts,
+            user_indices=active_users,
             alpha=alpha,
             tau=tau,
             seed=seed + t
@@ -104,12 +128,21 @@ def _run_single_seed(
         cov = compute_catalog_coverage(recs, n_items)
         aplt = compute_aplt(recs, long_tail_mask)
 
-        # Category drift
-        u_recs_cat = item_category_matrix[recs]
+        # Recommendation-category mix vs baseline user taste.
+        safe_recs = np.clip(recs, 0, n_items - 1)
+        u_recs_cat = item_category_matrix[safe_recs]
+        u_recs_cat[recs < 0] = 0.0
         cat_sum = u_recs_cat.sum(axis=1)
         sum_val = cat_sum.sum(axis=1, keepdims=True)
         current_rec_dist = np.where(sum_val > 0, cat_sum / np.maximum(sum_val, 1e-9), uniform_dist)
-        mean_kl_drift = float(np.mean(compute_kl_divergence_drift(base_user_dist, current_rec_dist)))
+        rec_kl = float(np.mean(compute_kl_divergence_drift(base_user_dist, current_rec_dist)))
+
+        # Realized taste drift: what users actually clicked this generation.
+        click_dist, has_click = _category_distribution_from_pairs(
+            u_clicks, i_clicks, n_users, n_items, item_category_matrix, base_user_dist
+        )
+        click_kl = compute_kl_divergence_drift(base_user_dist, click_dist)
+        mean_kl_drift = float(np.mean(click_kl[has_click])) if np.any(has_click) else 0.0
 
         # Subgroup disparity
         ndcg_pop = compute_ndcg_at_k(recs[cohorts["pop"]], test_csr[cohorts["pop"]], k=k) if len(cohorts["pop"]) > 0 else 0.0
@@ -121,48 +154,51 @@ def _run_single_seed(
         rec = compute_recall_at_k(recs, test_csr, k=k)
         ndcg = compute_ndcg_at_k(recs, test_csr, k=k)
 
-        # Sparse score construction (replaces massive dense matrix if supported)
-        flat_recs = recs.flatten()
-        tile_weights = np.tile(rank_weights, n_users)
-        score_matrix = sp.csr_matrix(
-            (tile_weights, (user_rows, flat_recs)),
-            shape=(n_users, n_items),
-            dtype=np.float32
-        )
-        # Note: If compute_vectorized_auc strictly requires an ndarray, call .toarray() here
-        auc = compute_vectorized_auc(score_matrix, test_csr)
+        # Tie-aware AUC over real full-catalog scores (never a top-K matrix).
+        full_scores = model_adapter.score_all(active_users)
+        auc = compute_vectorized_auc(full_scores, test_csr, exclude_matrix=D_t)
 
         # Geometry
-        U_t, V_t = model_adapter.get_embeddings()
-        if V_t is not None:
-            _ = compute_reflection_corrected_procrustes(V_star, V_t)
-            r_norm_arr = compute_relative_norm_shift(V_star, V_t)
-            mean_r_norm = float(np.mean(r_norm_arr))
-            s_eff = compute_effective_rank(V_t)
+        _, V_t = model_adapter.get_embeddings()
+        if V_t is not None and V_model_0 is not None:
+            V_t_aligned = compute_reflection_corrected_procrustes(V_model_0, V_t)
+            r_norm_arr = compute_relative_norm_shift(V_model_0, V_t_aligned)
+            valid_norm = np.isfinite(r_norm_arr)
+            r_norm_valid_frac = float(np.mean(valid_norm))
+            if np.any(valid_norm):
+                r_norm_median = float(np.median(r_norm_arr[valid_norm]))
+                r_norm_mean = float(np.mean(r_norm_arr[valid_norm]))
+            else:
+                r_norm_median, r_norm_mean = 1.0, 1.0
+            s_eff = compute_effective_rank(V_t_aligned)
         else:
-            mean_r_norm = 1.0
+            r_norm_median, r_norm_mean, r_norm_valid_frac = 1.0, 1.0, 0.0
             s_eff = 1.0
 
         seed_metrics["gini"].append(gini)
         seed_metrics["coverage"].append(cov)
         seed_metrics["aplt"].append(aplt)
         seed_metrics["kl_drift"].append(mean_kl_drift)
+        seed_metrics["rec_kl"].append(rec_kl)
         seed_metrics["subgroup_gap"].append(subgroup_gap)
         seed_metrics["precision"].append(prec)
         seed_metrics["recall"].append(rec)
         seed_metrics["ndcg"].append(ndcg)
         seed_metrics["auc"].append(auc)
-        seed_metrics["r_norm"].append(mean_r_norm)
+        seed_metrics["r_norm"].append(r_norm_median)
+        seed_metrics["r_norm_mean"].append(r_norm_mean)
+        seed_metrics["r_norm_valid_frac"].append(r_norm_valid_frac)
         seed_metrics["s_eff"].append(s_eff)
 
         # 4. Ingestion
         D_t = merge_and_deduplicate(D_t, (u_clicks, i_clicks))
 
-        # 5. Cold Retrain
-        model_adapter = adapter_cls(**kwargs)
-        model_adapter.fit(D_t, seed=seed + t + 1)
+        # 5. Cold retrain for the next generation only.
+        if t < T - 1:
+            model_adapter = adapter_cls(**kwargs)
+            model_adapter.fit(D_t, seed=seed + t + 1)
 
-    del model_adapter, D_t, U_star, V_star
+    del model_adapter, D_t, U_anchor, V_anchor
     gc.collect()
     return seed_metrics
 
@@ -174,11 +210,12 @@ def run_simulation_pipeline(
     seeds: List[int] = [42, 123, 456],
     T: int = 5,
     k: int = 10,
-    alpha: float = 0.5,
+    alpha: float = 0.8,
     tau: float = 1.0,
     item_category_matrix: Optional[np.ndarray] = None,
     adapter_kwargs: Optional[Dict[str, Any]] = None,
     max_workers: Optional[int] = None,
+    anchor_dim: int = 32,
 ) -> Dict[str, Any]:
     n_users, n_items = base_csr.shape
     kwargs = adapter_kwargs.copy() if adapter_kwargs else {}
@@ -196,6 +233,9 @@ def run_simulation_pipeline(
 
     base_user_dist = _compute_baseline_user_dist(base_csr, item_category_matrix)
 
+    # One shared, model-independent anchor for every adapter and seed.
+    U_anchor, V_anchor = build_shared_anchor(base_csr, dim=anchor_dim, seed=42)
+
     # Parallelize across seeds using processes
     worker_args = [
         (
@@ -212,6 +252,8 @@ def run_simulation_pipeline(
             cohorts,
             base_user_dist,
             item_category_matrix,
+            U_anchor,
+            V_anchor,
         )
         for seed in seeds
     ]
@@ -233,6 +275,14 @@ def run_simulation_pipeline(
     return {
         "seeds": seeds,
         "generations": T,
+        "config": {
+            "anchor_method": "truncated_svd",
+            "anchor_dim": int(U_anchor.shape[1]),
+            "alpha": alpha,
+            "tau": tau,
+            "k": k,
+            "T": T,
+        },
         "aggregated": aggregated_results,
         "seed_runs": seed_runs_history,
     }

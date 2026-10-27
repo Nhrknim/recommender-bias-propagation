@@ -3,6 +3,7 @@ import sys
 import time
 import json
 import uuid
+import subprocess
 from datetime import datetime
 import numpy as np
 
@@ -17,6 +18,21 @@ from src.adapters.cornac_adapters import (
 )
 from src.adapters.lightgcn_adapter import LightGCNAdapter
 from src.orchestrator import run_simulation_pipeline
+
+
+def _git_sha() -> str:
+    """Return the current commit SHA (or a marker for a dirty/unavailable tree)."""
+    try:
+        sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL, text=True
+        ).strip()
+        dirty = subprocess.check_output(
+            ["git", "status", "--porcelain"], stderr=subprocess.DEVNULL, text=True
+        ).strip()
+        return f"{sha}-dirty" if dirty else sha
+    except Exception:
+        return "unknown"
+
 
 def main():
     run_id = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
@@ -58,6 +74,26 @@ def main():
     T = 50
     K = 10
     alpha = 0.8  # Stronger social conformity weight for active bias dynamics
+    anchor_dim = 32
+
+    config = {
+        "epochs": {"MF": 10, "PMF": 10, "BPR": 10, "MostPop": None, "LightGCN": 5},
+        "dim": 32,
+        "max_iter": 10,
+        "layers": 3,
+        "batch_size": 32768,
+        "alpha": alpha,
+        "tau": 1.0,
+        "k": K,
+        "T": T,
+        "seeds": seeds,
+        "anchor_method": "truncated_svd",
+        "anchor_dim": anchor_dim,
+        "dataset": "MovieLens-1M",
+        "train_threshold": 4.0,
+        "split_ratio": 0.8,
+        "git_sha": _git_sha(),
+    }
 
     benchmark_summary = {}
     raw_results = {}
@@ -79,6 +115,7 @@ def main():
             "k": K,
             "alpha": alpha,
             "seeds": seeds,
+            "config": config,
             "models_completed": list(benchmark_summary.keys()),
             "results": benchmark_summary,
         }
@@ -87,9 +124,18 @@ def main():
         with open("docs/benchmarks/latest_checkpoint.json", "w", encoding="utf-8") as _f:
             json.dump(payload, _f, indent=2)
         print(f"  [checkpoint] Flushed {len(benchmark_summary)} model(s) → {checkpoint_path}")
+        # Keep partial-run diagnostics out of the publication asset paths. The
+        # full 5-model dashboard is generated only from the final run JSON.
+        checkpoint_plot = "docs/benchmarks/checkpoint_trajectories.png"
         try:
             import subprocess
-            subprocess.run([sys.executable, "scripts/plot_results.py", "trajectories", "--json", checkpoint_path], check=False)
+            subprocess.run(
+                [
+                    sys.executable, "scripts/plot_results.py", "trajectories",
+                    "--json", checkpoint_path, "--out", checkpoint_plot, "--no-sync",
+                ],
+                check=False,
+            )
         except Exception as _e:
             print(f"  [checkpoint] Plot update failed: {_e}")
 
@@ -130,7 +176,8 @@ def main():
     report_lines.append("# Closed-Loop Recommender Bias Benchmark Report\n")
     report_lines.append(f"**Run ID:** `{run_id}`")
     report_lines.append(f"**Dataset:** MovieLens-1M ({n_users:,} users, {n_items:,} items, {genre_matrix.shape[1]} genres)")
-    report_lines.append(f"**Configuration:** T={T} generations, K={K}, alpha={alpha}, seeds={seeds}\n")
+    report_lines.append(f"**Configuration:** T={T} generations, K={K}, alpha={alpha}, tau=1.0, seeds={seeds}, anchor=truncated-SVD(d={anchor_dim})")
+    report_lines.append(f"**Git SHA:** `{config['git_sha']}`\n")
 
     table_header = "| Model Architecture | " + " | ".join([f"t={t}" for t in range(T)]) + " |"
     table_divider = "| :--- | " + " | ".join([":---" for _ in range(T)]) + " |"
@@ -145,12 +192,23 @@ def main():
         report_lines.append(row)
 
     report_lines.append("\n## Tier 2: User Genre Taste Drift ($D_{\\text{KL}}$)\n")
+    report_lines.append("Realized click-category drift from the baseline user distribution.\n")
     report_lines.append(table_header)
     report_lines.append(table_divider)
 
     for model_name in benchmark_summary:
         kl_means = benchmark_summary[model_name]["kl_drift"]["mean"]
         row = f"| {model_name} | " + " | ".join([f"{k:.4f}" for k in kl_means]) + " |"
+        report_lines.append(row)
+
+    report_lines.append("\n## Tier 2b: Recommendation-Category Drift ($D_{\\text{KL}}^{\\text{rec}}$)\n")
+    report_lines.append("Divergence between the recommendation slate's category mix and baseline taste.\n")
+    report_lines.append(table_header)
+    report_lines.append(table_divider)
+
+    for model_name in benchmark_summary:
+        rec_kl_means = benchmark_summary[model_name].get("rec_kl", {}).get("mean", [])
+        row = f"| {model_name} | " + " | ".join([f"{k:.4f}" for k in rec_kl_means]) + " |"
         report_lines.append(row)
 
     report_lines.append("\n## Tier 3: Recommendation Accuracy (NDCG@10)\n")
@@ -169,6 +227,24 @@ def main():
     for model_name in benchmark_summary:
         seff_means = benchmark_summary[model_name]["s_eff"]["mean"]
         row = f"| {model_name} | " + " | ".join([f"{s:.4f}" for s in seff_means]) + " |"
+        report_lines.append(row)
+
+    report_lines.append("\n## Tier 4b: Relative Embedding Norm Shift ($R_{\\text{norm}}$, median)\n")
+    report_lines.append(table_header)
+    report_lines.append(table_divider)
+
+    for model_name in benchmark_summary:
+        rnorm_means = benchmark_summary[model_name].get("r_norm", {}).get("mean", [])
+        row = f"| {model_name} | " + " | ".join([f"{r:.4f}" for r in rnorm_means]) + " |"
+        report_lines.append(row)
+
+    report_lines.append("\n## Tier 3b: Full-Catalog Tie-Aware AUC\n")
+    report_lines.append(table_header)
+    report_lines.append(table_divider)
+
+    for model_name in benchmark_summary:
+        auc_means = benchmark_summary[model_name].get("auc", {}).get("mean", [])
+        row = f"| {model_name} | " + " | ".join([f"{a:.4f}" for a in auc_means]) + " |"
         report_lines.append(row)
 
     report_content = "\n".join(report_lines)
@@ -196,6 +272,7 @@ def main():
             "k": K,
             "alpha": alpha,
             "seeds": seeds,
+            "config": config,
             "results": benchmark_summary
         }, f, indent=2)
 
