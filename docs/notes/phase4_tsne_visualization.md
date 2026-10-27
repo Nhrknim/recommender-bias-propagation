@@ -40,7 +40,7 @@ If left unchecked, the algorithm begins to "eat its own tail." It keeps recommen
 ![4-Tier Benchmark Trajectories](../images/phase_4_tsne_visualization/benchmark_trajectories.png)
 
 #### 1. What You Are Looking At:
-* **The 4 Charts**: Each quadrant tracks one critical health metric of the recommender across the 10 generations ($x$-axis: Generation 0 to 9) using 100% measured simulation data across 3 random seeds (`[42, 123, 456]`).
+* **The 4 Charts**: Each quadrant tracks one critical health metric of the recommender across **50 generations** ($x$-axis: Generation $t=0$ to $t=49$) using 100% measured simulation data across 3 random seeds (`[42, 123, 456]`, Run `run_20261027_122309_2acc8b`).
 * **Lines & Colors (Unified Bottom Legend)**:
   * **Dark Blue (`-o`)**: Matrix Factorization (MF)
   * **Cyan (`-.v`)**: Probabilistic Matrix Factorization (PMF)
@@ -49,49 +49,55 @@ If left unchecked, the algorithm begins to "eat its own tail." It keeps recommen
   * **Green (`-D`)**: LightGCN (Graph CF)
   * **Shaded Bands**: $\pm 1\sigma$ empirical standard deviation across randomized seeds.
 
-#### 2. What the Charts Show:
-* **Top-Left (Catalog Exposure Inequality — Gini Index)**:
-  * *What it means*: Measures fairness. A score of $1.0$ means all recommendation slots go to a handful of blockbusters; a low score means the catalog is shared evenly.
-  * *Finding*: MostPop, LightGCN, and PMF are trapped at extreme exposure inequality ($G \approx 0.99$). Notice how BPR steadily climbs upward over time ($0.5318 \to 0.5544$). Even though BPR is a personalized model, the feedback loop steadily forces it to showcase fewer unique movies. MF maintains a steady intermediate inequality ($G \approx 0.6705 - 0.6836$).
-* **Top-Right (Taste Drift — KL Divergence)**:
+#### 2. What the Charts Show Across 50 Generations:
+* **Top-Left (Catalog Exposure Inequality — Gini Index $G$)**:
+  * *What it means*: Measures distribution fairness. A score of $1.0$ means all recommendation slots go to a handful of blockbusters; a low score means the catalog is shared evenly.
+  * *Finding*: MostPop ($G = 0.9949 \to 0.9819$), LightGCN ($G = 0.9949 \to 0.9820$), and PMF ($G = 0.9971 \to 0.9942$) remain locked in extreme exposure monopoly throughout all 50 generations. Crucially, **BPR experiences a runaway bias explosion**: starting balanced at $G = 0.5318$, it steadily compounds inequality to **$G = 0.9633$** by $t=49$, proving that pairwise ranking feedback under social conformity ($\alpha = 0.8$) inevitably starves the long-tail. MF maintains stable intermediate inequality ($G \approx 0.6819 \to 0.6178$).
+* **Top-Right (Taste Drift — KL Divergence $D_{\text{KL}}$)**:
   * *What it means*: Measures how far users are nudged away from their true initial movie tastes.
-  * *Finding*: LightGCN and MostPop plummet ($4.32 \to 2.75 - 2.94$) because graph smoothing and popularity dominance force all users into the exact same narrow mainstream bucket, stripping away personal individuality.
+  * *Finding*: LightGCN and MostPop plunge rapidly ($4.32 \to 2.76$ in early generations, stabilizing around $3.49 - 3.79$) because graph neighborhood smoothing and popularity dominance force users into the same narrow mainstream buckets. MF ($D_{\text{KL}} \approx 4.95 - 5.29$) and BPR ($D_{\text{KL}} \approx 4.74 - 5.41$) preserve user preference divergence.
 * **Bottom-Left (Recommendation Accuracy — NDCG@10)**:
   * *What it means*: How accurately the algorithm predicts what users actually want on held-out test data.
-  * *Finding*: LightGCN and MostPop deliver high initial accuracy ($NDCG \approx 0.0787$), but collapse by **over 35%** (falling to $0.0510$) by generation 9. Over-recommending popular hits quickly exhausts catalog novelty and degrades true personalization.
-* **Bottom-Right (Variety of Representation Topics — Effective Rank)**:
-  * *What it means*: Measures how many independent "topics" or "dimensions" the model uses to understand movies. If it drops, the model is seeing the world in fewer colors.
-  * *Finding*: MostPop has an effective rank of exactly $1.0$ (it only understands one concept: popularity). LightGCN rapidly loses dimensionality ($18.11 \to 13.69 \to 8.63$), confirming structural manifold collapse, while MF ($31.95$) and BPR ($31.78$) preserve full representation span.
+  * *Finding*: LightGCN and MostPop deliver high initial accuracy ($NDCG \approx 0.0787$), but **collapse by over 62%** (falling to **$0.0296$** by generation 49). Over-recommending popular hits exhausts catalog novelty and destroys personalization. BPR climbs from $0.0073 \to 0.0239$ around $t=30$ before stabilizing near $0.0192$.
+* **Bottom-Right (Variety of Representation Topics — Effective Rank $S_{\text{eff}}$)**:
+  * *What it means*: Measures how many independent mathematical dimensions the model uses to represent items.
+  * *Finding*: MostPop is permanently fixed at $S_{\text{eff}} = 1.000$ (strictly 1-dimensional). LightGCN suffers massive, continuous manifold collapse from $S_{\text{eff}} = \mathbf{17.96} \to \mathbf{8.45}$ (**destroying over 53% of its representation span**). BPR contracts from $31.87 \to \mathbf{20.56}$ as popularity attractors warp latent space. MF preserves isotropic spread ($S_{\text{eff}} \approx 31.96$).
 
 > [!NOTE]
 > **Key Empirical Takeaway — The Illusion of Personalization:**  
-> Notice that LightGCN and MostPop trace virtually identical paths in Tiers 1, 2, and 3. Because multi-hop graph convolution ($D^{-1/2}AD^{-1/2}$) aggregates information across users, high-degree blockbuster nodes become connected to almost all users after 3 hops. Without explicit degree-debiasing, LightGCN behaviorally degenerates into MostPop in the closed loop, despite learning in a 32-dimensional embedding space.
+> Notice that LightGCN and MostPop trace virtually identical paths in Tiers 1, 2, and 3 across all 50 generations. Because multi-hop graph convolution ($D^{-1/2}AD^{-1/2}$) aggregates information across users, high-degree blockbuster nodes become connected to almost all users. Without explicit degree-debiasing, LightGCN behaviorally degenerates into MostPop in the closed loop, despite having 32 latent parameters per entity.
 
 ---
 
-### Visual 2: The Popularity Gravity Trap
+### Visual 2: The Popularity Gravity Trap (Top-30 vs. Bottom-30 Drift)
 * **Assets by Model**:
   * **BPR**: [docs/images/phase_4_tsne_visualization/bpr/tsne_popularity_drift.png](../images/phase_4_tsne_visualization/bpr/tsne_popularity_drift.png)
   * **MF**: [docs/images/phase_4_tsne_visualization/mf/tsne_popularity_drift.png](../images/phase_4_tsne_visualization/mf/tsne_popularity_drift.png)
   * **PMF**: [docs/images/phase_4_tsne_visualization/pmf/tsne_popularity_drift.png](../images/phase_4_tsne_visualization/pmf/tsne_popularity_drift.png)
+  * **LightGCN**: [docs/images/phase_5_lightgcn/tsne_popularity_drift.png](../images/phase_5_lightgcn/tsne_popularity_drift.png)
 
 ![t-SNE Popularity Drift (BPR)](../images/phase_4_tsne_visualization/bpr/tsne_popularity_drift.png)
 
 #### 1. What You Are Looking At:
-* A 2D map of all 3,533 movies generated using joint t-SNE (so both maps share the exact same coordinate system).
-* **Colors**: Points are shaded by log-popularity:
+* A 2D map of all 3,533 movies generated using joint t-SNE (so baseline and final generation share the exact same projection space).
+* **Colors**: Points are shaded by log-popularity ($\log_{10}(\text{interactions})$) using a dedicated right-margin colorbar that never overlaps with the plots.
   * **Bright Yellow / Light Green**: Heavy blockbusters with thousands of ratings (e.g., *Star Wars*, *Titanic*, *Jurassic Park*).
   * **Deep Purple**: Niche, long-tail movies with few ratings.
-* **Left Panel ($t=0$)**: The starting baseline before any feedback loops begin.
-* **Right Panel ($t=9$)**: The state of the movie world after 10 feedback iterations.
-* **Red Arrows**: Trace the physical movement of the top-50 most popular movies from their starting point to their ending point.
+* **Left Panel ($t=0$)**: The starting baseline before any closed-loop feedback occurs.
+* **Right Panel ($t_{\text{final}}$)**: The state of the item universe post-drift.
+* **Dual Drift Vector Arrows**:
+  * 🔴 **Red Arrows (`#e41a1c`)**: Trace the physical movement of the **Top-30 most popular items (short-tail)**.
+  * 🔵 **Blue Arrows (`#1f77b4`)**: Trace the physical movement of the **Bottom-30 least popular items (long-tail)**.
+  * An embedded legend in the right panel distinguishes the two groups.
 
-#### 2. What is Happening:
-* In the left panel ($t=0$), popular and niche movies are reasonably distributed across different clusters according to their style.
-* By generation 9 (right panel), the red arrows all point inward toward tight clusters. Popular movies are pulled together into dense "super-attractors."
+#### 2. Comparative Dynamics Across Model Architectures:
+* **BPR**: Exhibits the clearest divergence. Top-30 red arrows point decisively inward toward tight central attractor cores, consolidating popularity clusters. In contrast, bottom-30 blue arrows are scattered randomly outward across the outer perimeter, demonstrating long-tail expulsion.
+* **PMF**: Severe structural distortion. Short-tail red arrows migrate en masse toward an isolated upper-right attractor cluster, while long-tail blue arrows remain collapsed along the bottom manifold boundary.
+* **MF**: Both short-tail and long-tail items display relatively small, isotropic displacements without localized clustering, consistent with its stable effective rank ($S_{\text{eff}} \approx 31.96$).
+* **LightGCN**: Coordinated, high-velocity migration of short-tail items ($d_{\text{Euc}} = 1.155$) into a dense graph-structural attractor, while long-tail items remain nearly static ($d_{\text{Euc}} \approx 0.221$).
 
 #### 3. Core Takeaway:
-Popular movies act like **black holes with gravitational pull**. Because they receive more recommendation slots and clicks, the model updates their coordinates aggressively, dragging them into the center of the taste space. Meanwhile, niche purple movies on the periphery are virtually abandoned—they never get recommended, never get clicked, and freeze in place.
+Popular items act like **gravitational black holes**. Because they receive disproportionate recommendation exposure and user clicks, gradient updates pull them together into high-density attractor hubs. Meanwhile, niche long-tail items receive zero feedback signals, causing them to freeze in place or drift into irrelevance.
 
 ---
 

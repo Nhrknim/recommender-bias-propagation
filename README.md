@@ -59,7 +59,8 @@ The project combines empirical data preparation, multi-model benchmarking using 
 │   ├── phase_3_mf_pmf_bpr.ipynb              # Phase 3: Latent space dynamics (MF, PMF, BPR)
 │   ├── phase_4_tsne_visualization.ipynb      # Phase 4: Embedding space manifold & drift visuals
 │   └── phase_5_lightgcn.ipynb                # Phase 5: LightGCN graph-powered bias amplification
-├── scripts/                                  # Benchmark & simulation execution scripts
+├── scripts/                                  # Benchmark, plotting & simulation execution scripts
+│   ├── plot_results.py                       # Trajectory dashboards & t-SNE popularity-drift plots
 │   └── run_full_benchmark.py                 # Full capability multi-model benchmark script
 ├── src/                                      # Closed-loop simulator python architecture
 │   ├── adapters/                             # Subsystem 2: Model facade adapters
