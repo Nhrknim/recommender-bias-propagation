@@ -1,12 +1,10 @@
+import json
 import os
 import sys
-import glob
-import json
 sys.path.insert(0, os.path.abspath('.'))
 
 import numpy as np
 import pandas as pd
-import scipy.sparse as sp
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -14,7 +12,6 @@ import seaborn as sns
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 from PIL import Image
-import torch
 
 from src.data.dataset import load_movielens_1m
 from src.data.buffer import merge_and_deduplicate
@@ -26,7 +23,11 @@ from src.metrics.geometry import (
     compute_effective_rank,
     compute_drift_metrics_32d,
 )
-from scripts.plot_benchmark_trajectories import find_latest_json, plot as plot_benchmark
+from scripts.plot_results import (
+    find_best_benchmark_json,
+    plot_benchmark_trajectories as plot_benchmark,
+    plot_tsne_popularity_drift,
+)
 
 OUTPUT_DIR = "docs/images/phase_5_lightgcn"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -45,7 +46,7 @@ def main():
     print("=== Step 1: Generating 5-Model Benchmark Trajectories from Real JSON Data ===")
     print("=" * 80)
     
-    benchmark_json = find_latest_json("docs/benchmarks")
+    benchmark_json = find_best_benchmark_json("docs/benchmarks")
     print(f"Loading real benchmark simulation results from: {benchmark_json}")
     with open(benchmark_json, "r", encoding="utf-8") as f:
         bench_data = json.load(f)
@@ -84,7 +85,7 @@ def main():
 
     # Fit LightGCN at baseline t=0
     print("\nFitting LightGCN at generation t=0 on real interaction matrix D_0...")
-    adapter = LightGCNAdapter(dim=32, n_layers=3, epochs=5, batch_size=32768, device="cpu")
+    adapter = LightGCNAdapter(dim=32, n_layers=3, epochs=20, batch_size=32768, device="cpu")
     adapter.fit(train_mat, seed=42)
     U_0, V_0 = adapter.get_embeddings()
     U_star, V_star = U_0.copy(), V_0.copy()
@@ -143,7 +144,7 @@ def main():
                 alpha=0.8, tau=1.0, seed=42 + gen
             )
             D_t = merge_and_deduplicate(D_t, (u_clicks, i_clicks))
-            adapter = LightGCNAdapter(dim=32, n_layers=3, epochs=5, batch_size=32768, device="cpu")
+            adapter = LightGCNAdapter(dim=32, n_layers=3, epochs=20, batch_size=32768, device="cpu")
             adapter.fit(D_t, seed=42 + gen + 1)
 
     # Save complete 50-generation trajectory log to disk
@@ -170,7 +171,6 @@ def main():
 
     V_final_aligned = V_trajectory_aligned[-1]
     final_pop = np.array(D_t.sum(axis=0)).flatten()
-    log_base_pop = np.log10(np.maximum(base_pop, 1))
     log_final_pop = np.log10(np.maximum(final_pop, 1))
 
     print("\n" + "=" * 80)
@@ -185,27 +185,20 @@ def main():
 
     # Visual 2: t-SNE Popularity Drift (t=0 vs t=49)
     print("\nGenerating Visual 2: tsne_popularity_drift.png...")
-    fig, axes = plt.subplots(1, 2, figsize=(16, 7), sharex=True, sharey=True)
-    fig.suptitle('LightGCN Graph-Powered Latent Manifold Drift: t=0 vs t=49 (Colored by Log-Popularity)', fontsize=14, fontweight='bold')
-
-    sc0 = axes[0].scatter(coords_0[:, 0], coords_0[:, 1], c=log_base_pop, cmap='viridis', s=20, alpha=0.75)
-    axes[0].set_title('Generation t=0 (Graph Bipartite Baseline)')
-    axes[0].set_xlabel('t-SNE Dimension 1')
-    axes[0].set_ylabel('t-SNE Dimension 2')
-
-    sc1 = axes[1].scatter(coords_final[:, 0], coords_final[:, 1], c=log_final_pop, cmap='viridis', s=20, alpha=0.75)
-    top_pop_indices = np.argsort(final_pop)[-50:]
-    for idx in top_pop_indices:
-        axes[1].annotate('', xy=(coords_final[idx, 0], coords_final[idx, 1]), xytext=(coords_0[idx, 0], coords_0[idx, 1]),
-                         arrowprops=dict(arrowstyle='->', color='#e41a1c', lw=1.2, alpha=0.8, shrinkA=0, shrinkB=0))
-    axes[1].set_title('Generation t=49 (Long-Horizon Structural Attractor Collapse)')
-    axes[1].set_xlabel('t-SNE Dimension 1')
-
-    cbar = fig.colorbar(sc1, ax=axes.ravel().tolist(), shrink=0.8, pad=0.02)
-    cbar.set_label('Log10(Interactions)')
     pop_drift_path = os.path.join(OUTPUT_DIR, "tsne_popularity_drift.png")
-    plt.savefig(pop_drift_path, dpi=200, bbox_inches='tight')
-    plt.close()
+    plot_tsne_popularity_drift(
+        model_name="LightGCN",
+        coords_0=coords_0,
+        coords_final=coords_final,
+        base_pop=base_pop,
+        final_pop=final_pop,
+        t_final=T - 1,
+        out_path=pop_drift_path,
+        top_n=30,
+        bot_n=30,
+        base_title="Generation t=0 (Graph Bipartite Baseline)",
+        final_title=f"Generation t={T-1} (Attractor Collapse vs Long-Tail Dispersion)",
+    )
     print("Saved:", pop_drift_path)
 
     # Visual 3: Genre Clusters (t=0 vs t=49)

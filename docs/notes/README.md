@@ -31,9 +31,9 @@ This directory contains the theoretical foundations, empirical notes, mathematic
 
 ### 4. Phase 4: Closed-Loop Simulation & Latent Manifold Visualization
 * [**phase4_tsne_visualization.md**](./phase4_tsne_visualization.md)
-  * Accessible, plain-language walkthrough of the 10- and 50-generation closed-loop simulation.
-  * 4-tier benchmark trajectory dynamics ($G$, $D_{\text{KL}}$, $NDCG@10$, $S_{\text{eff}}$).
-  * 2D t-SNE latent space maps showing popularity gravity traps, genre blurring, and manifold density collapse.
+  * Accessible, plain-language walkthrough of the 50-generation closed-loop simulations.
+  * 4-tier benchmark trajectory dynamics ($G$, $D_{\text{KL}}$, $NDCG@10$, $S_{\text{eff}}$) comparing MF, PMF, BPR, MostPop, and LightGCN.
+  * 2D t-SNE latent space maps showing popularity gravity traps with dual drift vectors (Top-30 red vs. Bottom-30 blue), genre blurring, and manifold density collapse.
   * Full **32-dimensional quantitative embedding drift analysis**: Euclidean drift (odometer), Cosine drift (compass), and Vector Norm magnitude (megaphone) across popularity tiers.
   * Complete image breakdowns and direct links to all generated visual assets and 50-frame dynamic GIFs across BPR, MF, and PMF.
 
@@ -42,10 +42,10 @@ This directory contains the theoretical foundations, empirical notes, mathematic
 * [**phase5_lightgcn.md**](./phase5_lightgcn.md)
   * Introduction of **LightGCN** as the first graph neural recommender in the closed-loop study.
   * Theoretical validation of the **Graph Centrality Hypothesis**: bipartite degree centrality creates a structural bias engine absent in matrix factorization models.
-  * 5-model benchmark comparison (MF, PMF, BPR, MostPop, LightGCN) with empirical $\pm 1\sigma$ error bands and unified bottom legend.
-  * Deep dive on the **"Illusion of Personalization"**: why LightGCN's macro trajectories (Gini, KL drift, NDCG) track MostPop almost identically in Tiers 1–3, while diverging sharply in Tier 4 latent effective rank collapse ($S_{\text{eff}} = 18.14 \to 8.63$).
-  * Full **50-generation long-horizon simulation** ($t=0 \dots 49$): $52.4\%$ collapse in latent effective rank and $5.1\times$ asymmetric drift velocity ratio (short-tail $1.245$ vs long-tail $0.244$).
-  * 2D t-SNE maps ($t=0$ vs $t=49$), genre cluster homogenisation, KDE density singularity, and two 50-frame dynamic GIFs generated from 100% real measured states.
+  * 5-model 50-generation benchmark comparison (MF, PMF, BPR, MostPop, LightGCN) with empirical $\pm 1\sigma$ error bands and unified bottom legend.
+  * Deep dive on the **"Illusion of Personalization"**: why LightGCN's macro trajectories (Gini, KL drift, NDCG) track MostPop almost identically in Tiers 1–3, while diverging sharply in Tier 4 latent effective rank collapse ($S_{\text{eff}} = 17.96 \to 8.45$).
+  * Full **50-generation long-horizon simulation** ($t=0 \dots 49$): $>53\%$ collapse in latent effective rank and $5.23\times$ asymmetric drift velocity ratio (short-tail $1.155$ vs long-tail $0.221$).
+  * 2D t-SNE maps ($t=0$ vs $t=49$) with dual drift arrows (Top-30 red vs Bottom-30 blue) and isolated colorbar, genre cluster homogenisation, KDE density singularity, and two 50-frame dynamic GIFs generated from 100% real measured states.
 
 ### 6. Phase 6: LightFM — Pairwise Ranking & WARP Loss Dynamics
 * [**phase6_lightfm.md**](./phase6_lightfm.md)

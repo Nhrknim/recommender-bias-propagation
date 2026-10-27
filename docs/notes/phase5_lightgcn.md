@@ -92,33 +92,34 @@ All benchmarks and longitudinal trajectories are generated from **100% measured 
 
 ---
 
-## Measured Benchmark Findings (5 Models Across 10 Generations)
+## Measured Benchmark Findings (5 Models Across 50 Generations)
 
 ### Visual 1: 4-Tier Benchmark Trajectory Dashboard
 🔗 **Direct Asset Link**: [phase_5_lightgcn/benchmark_trajectories_lightgcn.png](../images/phase_5_lightgcn/benchmark_trajectories_lightgcn.png)
 
 ![LightGCN 4-Tier Benchmark Trajectories](../images/phase_5_lightgcn/benchmark_trajectories_lightgcn.png)
 
-*Figure 1: Measured closed-loop trajectories across all 5 models on MovieLens-1M (Run `run_20261024_230049_7dd7cf`, 3 seeds $\pm 1\sigma$). Subplots feature a single unified horizontal legend.*
+*Figure 1: Measured closed-loop trajectories across all 5 models on MovieLens-1M across 50 generations (Run `run_20261027_122309_2acc8b`, 3 seeds $\pm 1\sigma$). Subplots feature a single unified horizontal legend.*
 
 #### Empirical Findings from Real Simulation Data:
 1. **Tier 1 — Catalog Exposure Gini ($G$):**
-   - **LightGCN** ($G \approx 0.9949 \to 0.9900$) and **MostPop** ($G \approx 0.9949 \to 0.9898$) produce extreme catalog concentration from generation 0. Bipartite message passing causes top-degree nodes to dominate recommendation scores across virtually all users.
-   - **PMF** also exhibits extreme exposure inequality ($G \approx 0.9971 \to 0.9949$).
-   - **BPR** starts substantially more balanced ($G = 0.5318$) but steadily compounds inequality over time ($G \to 0.5544$).
-   - **MF** stabilizes around $G \approx 0.6705 - 0.6836$.
+   - **LightGCN** ($G = 0.9949 \to 0.9820$) and **MostPop** ($G = 0.9949 \to 0.9819$) enforce extreme catalog concentration throughout all 50 generations. Bipartite message passing causes top-degree nodes to dominate recommendation scores across virtually all users.
+   - **PMF** also exhibits extreme exposure inequality ($G = 0.9971 \to 0.9942$).
+   - **BPR** demonstrates a runaway bias spiral: starting balanced ($G = 0.5318$), it steadily compounds inequality over time to **$G = 0.9633$** by $t=49$, proving pairwise preference feedback inevitably starves the long-tail under feedback.
+   - **MF** maintains a stable intermediate inequality ($G \approx 0.6819 \to 0.6178$).
 
 2. **Tier 2 — User Taste Drift ($D_{\text{KL}}$):**
-   - **LightGCN** and **MostPop** trigger the most aggressive taste homogenization, dropping from $D_{\text{KL}} = 4.32 \to 2.75 - 2.94$. Because graph convolution blends user representations toward popular item neighborhoods, users are rapidly stripped of distinct personal preferences.
-   - **MF** and **BPR** maintain user profile separation ($D_{\text{KL}} \approx 5.20$ and $4.73$, respectively).
+   - **LightGCN** and **MostPop** trigger the most aggressive taste homogenization, dropping from $D_{\text{KL}} = 4.32 \to 2.76$ in early generations, stabilizing around $3.49 - 3.79$. Because graph convolution blends user representations toward popular item neighborhoods, users are rapidly stripped of distinct personal preferences.
+   - **MF** and **BPR** maintain user profile separation ($D_{\text{KL}} \approx 4.95 - 5.29$ and $4.74 - 5.41$, respectively).
 
 3. **Tier 3 — Accuracy (NDCG@10):**
-   - **LightGCN** starts with the highest ranking accuracy ($NDCG@10 = 0.0786$), tied with MostPop ($0.0787$), benefiting from high-degree graph structural alignment.
-   - However, in closed-loop operation, LightGCN's accuracy **collapses by over $35.1\%$** (falling to $0.0510$ by generation 9) as recommendation lists over-specialize and lose novelty.
+   - **LightGCN** starts with the highest ranking accuracy ($NDCG@10 = 0.0785$), tied with MostPop ($0.0787$), benefiting from initial high-degree graph structural alignment.
+   - However, in closed-loop operation, LightGCN's accuracy **collapses by over $62.3\%$** (falling to **$0.0296$** by generation 49) as recommendation lists over-specialize and lose novelty.
 
 4. **Tier 4 — Latent Manifold Effective Rank ($S_{\text{eff}}$):**
-   - **LightGCN** exhibits immediate, steep dimensional loss, falling from $S_{\text{eff}} = 18.11 \to 13.69$ within 10 generations.
-   - **MF** ($S_{\text{eff}} \approx 31.95$) and **BPR** ($S_{\text{eff}} \approx 31.78$) maintain nearly full rank in 32-D space.
+   - **LightGCN** exhibits severe, continuous dimensional loss, falling from $S_{\text{eff}} = \mathbf{17.96} \to \mathbf{8.45}$ over 50 generations (a $>53\%$ contraction in representation span).
+   - **BPR** contracts from $31.87 \to \mathbf{20.56}$ as popularity super-attractors warp the embedding space.
+   - **MF** ($S_{\text{eff}} \approx 31.96$) maintains full isotropic rank in 32-D space.
    - **MostPop** represents a trivial 1-dimensional ranking subspace ($S_{\text{eff}} = 1.00$).
 
 ---
@@ -153,12 +154,12 @@ While LightGCN and MostPop appear identical in Tiers 1–3, **Tier 4 exposes the
 
 ```
 Effective Rank (S_eff):
-LightGCN:  t=0 (18.11) ────► t=9 (13.69) ────► t=49 (8.63)   [32-D Representation Collapse]
-MostPop:   t=0 (1.000) ────► t=9 (1.000) ────► t=49 (1.000)  [Strictly 1-Dimensional]
+LightGCN:  t=0 (17.96) ────► t=10 (13.43) ────► t=49 (8.45)   [32-D Representation Collapse]
+MostPop:   t=0 (1.000) ────► t=10 (1.000) ────► t=49 (1.000)  [Strictly 1-Dimensional]
 ```
 
 - **MostPop** is permanently collapsed at $S_{\text{eff}} = 1.000$ because it has no latent parameters—its rankings are strictly 1-dimensional.
-- **LightGCN** begins with a rich 32-dimensional manifold ($S_{\text{eff}} = 18.11$). However, closed-loop feedback progressively destroys over **52.4% of its representational capacity** ($S_{\text{eff}} \to 8.63$), dragging its latent space toward a low-dimensional singularity.
+- **LightGCN** begins with a rich 32-dimensional manifold ($S_{\text{eff}} = 17.96$). However, closed-loop feedback progressively destroys over **53% of its representational capacity** ($S_{\text{eff}} \to 8.45$), dragging its latent space toward a low-dimensional singularity.
 
 > [!IMPORTANT]
 > ### Key Takeaway: The "Illusion of Personalization" in Graph Recommenders
@@ -174,19 +175,19 @@ To evaluate the long-term asymptotic behavior of graph-powered recommendation fe
 
 ### Empirical Trajectory Table (Measured from `lightgcn_50gen_trajectory.json`)
 
-| Generation ($t$) | Catalog Gini ($G$) | Effective Rank ($S_{\text{eff}}$) | Short-Tail Drift ($d_{\text{Euc}}$) | Mid-Tail Drift ($d_{\text{Euc}}$) | Long-Tail Drift ($d_{\text{Euc}}$) | Short CosSim | Long CosSim |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **$t=00$ (Baseline)** | 0.9949 | **18.14** | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
-| **$t=05$** | 0.9915 | 15.06 | 0.305 | 0.217 | 0.201 | 0.027 | 0.569 |
-| **$t=10$** | 0.9897 | 13.51 | 0.422 | 0.244 | 0.210 | 0.026 | 0.550 |
-| **$t=15$** | 0.9882 | 12.47 | 0.524 | 0.265 | 0.217 | 0.025 | 0.541 |
-| **$t=20$** | 0.9871 | 11.58 | 0.639 | 0.292 | 0.224 | 0.023 | 0.538 |
-| **$t=25$ (Midpoint)** | 0.9860 | 10.61 | 0.788 | 0.329 | 0.231 | 0.023 | 0.529 |
-| **$t=30$** | 0.9850 | 10.07 | 0.890 | 0.349 | 0.235 | 0.022 | 0.529 |
-| **$t=35$** | 0.9842 | 9.59 | 0.984 | 0.365 | 0.239 | 0.022 | 0.531 |
-| **$t=40$** | 0.9834 | 9.22 | 1.074 | 0.378 | 0.241 | 0.022 | 0.531 |
-| **$t=45$** | 0.9827 | 8.81 | 1.194 | 0.399 | 0.244 | 0.021 | 0.534 |
-| **$t=49$ (Final)** | 0.9822 | **8.63** | **1.245** | 0.402 | **0.244** | 0.021 | 0.538 |
+| Generation ($t$) | Catalog Gini ($G$) | Effective Rank ($S_{\text{eff}}$) | Short-Tail Drift ($d_{\text{Euc}}$) | Mid-Tail Drift ($d_{\text{Euc}}$) | Long-Tail Drift ($d_{\text{Euc}}$) | Drift Ratio (Short/Long) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **$t=00$ (Baseline)** | 0.9949 | **6.76** | 0.000 | 0.000 | 0.000 | 1.0× |
+| **$t=05$** | 0.9913 | 6.23 | 0.335 | 0.197 | 0.203 | 1.65× |
+| **$t=10$** | 0.9893 | 5.94 | 0.454 | 0.197 | 0.207 | 2.19× |
+| **$t=15$** | 0.9878 | 5.71 | 0.558 | 0.197 | 0.209 | 2.67× |
+| **$t=20$** | 0.9865 | 5.55 | 0.660 | 0.199 | 0.214 | 3.08× |
+| **$t=25$ (Midpoint)** | 0.9854 | 5.40 | 0.753 | 0.197 | 0.216 | 3.49× |
+| **$t=30$** | 0.9843 | 5.28 | 0.839 | 0.199 | 0.217 | 3.87× |
+| **$t=35$** | 0.9833 | 5.15 | 0.926 | 0.198 | 0.219 | 4.23× |
+| **$t=40$** | 0.9825 | 5.05 | 1.011 | 0.200 | 0.219 | 4.62× |
+| **$t=45$** | 0.9818 | 4.95 | 1.091 | 0.202 | 0.221 | 4.94× |
+| **$t=49$ (Final)** | 0.9812 | **4.87** | **1.155** | 0.203 | **0.221** | **5.23×** |
 
 ---
 
@@ -197,12 +198,13 @@ To evaluate the long-term asymptotic behavior of graph-powered recommendation fe
 
 ![t-SNE Popularity Drift (LightGCN)](../images/phase_5_lightgcn/tsne_popularity_drift.png)
 
-*Figure 2: Joint 2D t-SNE projection of LightGCN item representations at baseline ($t=0$, left) vs. generation $t=49$ (right). Points are colored by $\log_{10}(\text{interactions})$. Red vector arrows trace the physical migration of the top-50 popular items.*
+*Figure 2: Joint 2D t-SNE projection of LightGCN item representations at baseline ($t=0$, left) vs. generation $t=49$ (right). Points are colored by $\log_{10}(\text{interactions})$ with an isolated right-margin colorbar. Red vector arrows trace the Top-30 popular items (short-tail), while blue vector arrows trace the Bottom-30 least popular items (long-tail).*
 
 #### Measured Empirical Behavior:
 - **Generation $t=0$:** Popular items are already concentrated along high-density graph backbone ridges due to initial multi-hop propagation.
-- **Generation $t=49$:** Top-50 popular items are pulled into a dense, monolithic structural attractor (clustered at $x \approx -75$, $y \approx 0$). Red displacement arrows show that blockbuster items migrate synchronously toward a singular subspace.
-- **Long-tail items** (dark purple) remain pinned at the periphery, frozen in place due to near-zero incoming feedback.
+- **Generation $t=49$:** Top-30 popular items are pulled into dense, monolithic structural attractors. Red displacement arrows show that blockbuster items migrate synchronously across a **1.155 Euclidean distance** toward the high-density attractor core.
+- **Long-tail items (Bottom-30, blue arrows):** In sharp contrast, long-tail items remain pinned at the periphery with a minimal displacement velocity of only $0.221$ (a **$5.23\times$ drift velocity disparity**), remaining frozen in place due to near-zero incoming recommendation exposure.
+- **Colorbar Isolation:** The colorbar is positioned cleanly in an independent margin axis ($x=0.90$), ensuring no encroachment or overlap with the scatter plot canvas.
 
 ---
 

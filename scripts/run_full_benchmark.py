@@ -55,7 +55,7 @@ def main():
     ]
 
     seeds = [42, 123, 456]
-    T = 10
+    T = 50
     K = 10
     alpha = 0.8  # Stronger social conformity weight for active bias dynamics
 
@@ -89,7 +89,7 @@ def main():
         print(f"  [checkpoint] Flushed {len(benchmark_summary)} model(s) → {checkpoint_path}")
         try:
             import subprocess
-            subprocess.run([sys.executable, "scripts/plot_benchmark_trajectories.py", "--json", checkpoint_path], check=False)
+            subprocess.run([sys.executable, "scripts/plot_results.py", "trajectories", "--json", checkpoint_path], check=False)
         except Exception as _e:
             print(f"  [checkpoint] Plot update failed: {_e}")
 
@@ -209,7 +209,7 @@ def main():
     # 6. Generate final plot
     try:
         import subprocess
-        subprocess.run([sys.executable, "scripts/plot_benchmark_trajectories.py", "--json", unique_json], check=True)
+        subprocess.run([sys.executable, "scripts/plot_results.py", "trajectories", "--json", unique_json], check=True)
         print(f"[OK] Generated final benchmark plot from {unique_json}")
     except Exception as e:
         print(f"[WARN] Failed to generate final plot: {e}")
