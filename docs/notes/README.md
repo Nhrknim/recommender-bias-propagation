@@ -47,10 +47,19 @@ This directory contains the theoretical foundations, empirical notes, mathematic
   * Full **50-generation long-horizon simulation** ($t=0 \dots 49$): $>53\%$ collapse in latent effective rank and $5.23\times$ asymmetric drift velocity ratio (short-tail $1.155$ vs long-tail $0.221$).
   * 2D t-SNE maps ($t=0$ vs $t=49$) with dual drift arrows (Top-30 red vs Bottom-30 blue) and isolated colorbar, genre cluster homogenisation, KDE density singularity, and two 50-frame dynamic GIFs generated from 100% real measured states.
 
-### 6. Theoretical Foundations & Closed-Loop Mechanics
+### 6. Phase 6: LightFM — Pairwise Ranking & WARP Loss Dynamics
+* [**phase6_lightfm.md**](./phase6_lightfm.md)
+  * Introduction of **LightFM** and evaluation of **WARP (Weighted Approximate-Rank Pairwise)** loss vs. standard **BPR** in the closed loop.
+  * Theoretical and empirical validation of WARP's **two built-in brakes**: scalar item biases absorbing raw popularity and adaptive rejection sampling acting as a gradient shut-off switch.
+  * In-depth clustering comparison: why LightFM prevented blockbusters from collapsing into an ultra-dense singularity, preserving genre separation.
+  * 4-tier benchmark metrics across 10 generations: WARP delivers **+29.7% higher NDCG@10** than BPR ($0.0672$ vs $0.0518$) and maintains **$G = 0.9212$** with only a **0.73%** graceful spectral contraction ($S_{\text{eff}} = 29.70 \to 29.49$).
+  * 2D t-SNE drift maps, genre boundary preservation, KDE density contours, and two dynamic trajectory animations (GIFs) tracking live 32-D quantitative drift metrics across popularity cohorts.
+
+### 7. Theoretical Foundations & Closed-Loop Mechanics
 * [**bias_propagation_and_embedding_dynamics.md**](./bias_propagation_and_embedding_dynamics.md)
   * Formal distinction between static algorithmic bias vs. dynamic closed-loop bias amplification.
   * 4-step closed-loop serving architecture: Candidate Recommendation $\to$ Vectorized Click Simulation $\to$ Buffer Ingestion $\to$ Cold Retraining.
   * 4-tier diagnostic metrics suite (Macro Exposure, User Group Disparity, Ranking Utility, Manifold Geometry).
   * Rotational invariance, Reflection-Corrected Orthogonal Procrustes alignment, and Effective Rank ($S_{\text{eff}}$).
+
 
