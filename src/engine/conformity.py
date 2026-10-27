@@ -18,15 +18,20 @@ def compute_social_conformity(
     """
     n_active, k = recs.shape
     max_pop = np.max(pop_counts) if len(pop_counts) > 0 else 0.0
+    safe_recs = np.clip(recs, 0, len(pop_counts) - 1) if len(pop_counts) > 0 else recs
 
     if max_pop == 0.0:
         # Initial baseline state with zero interactions across catalog
         p_conformity = np.zeros((n_active, k), dtype=np.float32)
     else:
         # Sub-linear logarithmic scaling
-        numerator = np.log1p(pop_counts[recs].astype(np.float32))
+        numerator = np.log1p(pop_counts[safe_recs].astype(np.float32))
         denominator = np.log1p(float(max_pop))
         p_conformity = np.clip(numerator / denominator, 0.0, 1.0)
+
+    # Padding slots are never valid recommendations.
+    p_conformity = np.asarray(p_conformity, dtype=np.float32)
+    p_conformity[recs < 0] = 0.0
 
     # Invariant assertions
     assert p_conformity.shape == (n_active, k), f"Conformity shape misaligned: {p_conformity.shape}"

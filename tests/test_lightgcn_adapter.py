@@ -184,10 +184,36 @@ class TestLightGCNAdapter(unittest.TestCase):
         self.assertEqual(V.shape, (self.n_items, self.dim))
 
     def test_k_larger_than_catalog_pads_correctly(self):
-        """When K > |I|, recommend() must return shape (N_active, K) via zero-padding."""
+        """When K > |I|, unused slots must carry the -1 padding sentinel."""
         adapter = self._make_adapter().fit(self.train_mat, seed=42)
         recs = adapter.recommend(np.array([0], dtype=np.int32), k=20)
         self.assertEqual(recs.shape, (1, 20))
+        self.assertTrue(np.all(recs[:, self.n_items:] == -1))
+        self.assertTrue(np.all(recs[:, : self.n_items] >= 0))
+
+    def test_all_seen_user_does_not_crash(self):
+        """A user with no unseen item must be skipped, not loop forever."""
+        rows = [0, 0, 0, 0, 0, 0, 1, 1]
+        cols = [0, 1, 2, 3, 4, 5, 0, 1]
+        dense_user = sp.csr_matrix(
+            (np.ones(len(rows), dtype=np.float32), (rows, cols)),
+            shape=(2, self.n_items),
+            dtype=np.float32,
+        )
+        adapter = LightGCNAdapter(
+            dim=self.dim, n_layers=2, epochs=2, batch_size=4, device="cpu"
+        )
+        adapter.fit(dense_user, seed=3)
+        U, V = adapter.get_embeddings()
+        self.assertFalse(np.isnan(U).any())
+        self.assertFalse(np.isnan(V).any())
+
+    def test_score_all_is_full_catalog(self):
+        """score_all must return real scores for every catalog item."""
+        adapter = self._make_adapter().fit(self.train_mat, seed=42)
+        scores = adapter.score_all(np.array([0, 2], dtype=np.int32))
+        self.assertEqual(scores.shape, (2, self.n_items))
+        self.assertTrue(np.all(np.isfinite(scores)))
 
 
 if __name__ == "__main__":

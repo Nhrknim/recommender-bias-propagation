@@ -43,6 +43,24 @@ class BaseRecommenderAdapter(ABC):
 
         Returns:
             recs: 2D NumPy array of shape (N_users, K) containing top-K global item indices.
+                  Unused slots when K > |I| are padded with the sentinel -1.
+        """
+        pass
+
+    @abstractmethod
+    def score_all(self, user_indices: np.ndarray) -> np.ndarray:
+        """
+        Returns real full-catalog scores for the requested users.
+
+        This is the canonical input for tie-aware AUC and any metric that needs
+        preferences over items outside the top-K list. Implementations must not
+        return the truncated top-K score matrix.
+
+        Args:
+            user_indices: 1D array of global user indices, shape (N_users,).
+
+        Returns:
+            scores: Dense float array of shape (N_users, |I|).
         """
         pass
 

@@ -15,11 +15,13 @@ sys.path.insert(0, ".")
 from src.data.dataset import load_movielens_1m
 from src.adapters.lightfm_adapter import LightFMAdapter
 from src.data.buffer import merge_and_deduplicate
+from src.engine.anchor import build_shared_anchor
 from src.engine.simulator import simulate_user_clicks
 from src.metrics.geometry import (
     compute_reflection_corrected_procrustes,
     compute_drift_metrics_32d,
 )
+from scripts.plot_results import find_lightfm_benchmark_json
 
 
 def main():
@@ -27,7 +29,7 @@ def main():
     print("  LIGHTFM (WARP) 32-D QUANTITATIVE EMBEDDING DRIFT TRAJECTORY SIMULATION")
     print("=" * 80)
 
-    output_dir = "docs/images/lightfm"
+    output_dir = "docs/images/phase_6_lightfm"
     os.makedirs(output_dir, exist_ok=True)
     gif_path = os.path.join(output_dir, "quantitative_embedding_drift_trajectory.gif")
     json_path = os.path.join("docs/benchmarks", "lightfm_quantitative_drift_metrics.json")
@@ -54,9 +56,14 @@ def main():
     print(f"  * Mid-tail (50-249):   {np.sum(mid_mask):,} movies ({np.sum(base_pop[mid_mask]):,} interactions)")
     print(f"  * Long-tail (< 50):    {np.sum(long_mask):,} movies ({np.sum(base_pop[long_mask]):,} interactions)")
 
-    T = 10
+    T = int(json.load(open(find_lightfm_benchmark_json(), "r", encoding="utf-8"))["generations"])
+    alpha = 0.8
+    k = 10
     active_users = np.arange(n_users, dtype=np.int32)
     D_t = train_mat.copy()
+
+    # Shared, model-independent click anchor (frozen across all generations).
+    U_anchor, V_anchor = build_shared_anchor(train_mat, dim=32, seed=42)
 
     # 2. Run simulation and compute 32-D quantitative drift metrics
     print(f"\n[Phase 2] Simulating {T} generations of closed-loop LightFM (WARP)...")
@@ -73,7 +80,7 @@ def main():
     # Initial baseline fit t=0
     adapter = LightFMAdapter(dim=32, loss="warp", epochs=5, learning_rate=0.005)
     adapter.fit(D_t, seed=42)
-    U_star, V_star = adapter.get_embeddings()
+    _, V_star = adapter.get_embeddings()
     item_embeddings_history.append(V_star.copy())
 
     # Baseline metrics at t=0
@@ -85,14 +92,15 @@ def main():
 
     for t in range(1, T):
         print(f"  * Simulating Generation t={t}...")
-        recs = adapter.recommend(active_users, k=10, remove_seen=True)
+        recs = adapter.recommend(active_users, k=k, remove_seen=True)
         pop_counts = np.asarray(D_t.sum(axis=0)).flatten()
         u_clicks, i_clicks = simulate_user_clicks(
             recs=recs,
-            U_star=U_star,
-            V_star=V_star,
+            U_star=U_anchor,
+            V_star=V_anchor,
             pop_counts=pop_counts,
-            alpha=0.8,
+            user_indices=active_users,
+            alpha=alpha,
             tau=1.0,
             seed=42 + t
         )
@@ -114,7 +122,23 @@ def main():
 
     # Save quantitative metrics to JSON
     with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(cohort_metrics, f, indent=2)
+        json.dump({
+            "model": "LightFM (WARP)",
+            "dataset": "MovieLens-1M",
+            "run_config": {
+                "generations": T,
+                "epochs": 5,
+                "dim": 32,
+                "alpha": alpha,
+                "tau": 1.0,
+                "k": k,
+                "anchor_method": "truncated_svd",
+                "anchor_dim": int(U_anchor.shape[1]),
+                "seed": 42,
+            },
+            "generations": T,
+            "cohort_metrics": cohort_metrics,
+        }, f, indent=2)
     print(f"[OK] Quantitative drift metrics saved to '{json_path}'")
 
     # 3. Project to shared 2D coordinate space for visual panel
@@ -145,6 +169,11 @@ def main():
     }
 
     all_t = list(range(T))
+    tick_step = max(1, T // 10)
+    ticks = list(range(0, T, tick_step))
+    if ticks[-1] != T - 1:
+        ticks.append(T - 1)
+    # Replace dense per-generation ticks in the quantitative panels.
 
     # Pre-calculate global axis limits for quantitative subplots
     max_euc = max(max(cohort_metrics[k]["euc"]) for k in cohort_metrics) * 1.15
@@ -211,7 +240,7 @@ def main():
         ax_euc.set_ylabel(r"Mean $d_{\mathrm{Euc}}$", fontsize=10, fontweight="bold")
         ax_euc.set_title(r"32-D Euclidean Drift: $\|v_i^{(t)\mathrm{aligned}} - v_i^{(0)}\|_2$", fontsize=11, fontweight="bold")
         ax_euc.legend(loc="upper left", frameon=True, fontsize=8)
-        ax_euc.set_xticks(all_t)
+        ax_euc.set_xticks(ticks)
 
         # Right Panel 2 (Middle): 32-D Mean Cosine Drift
         ax_cos = fig.add_subplot(gs[1, 1])
@@ -223,7 +252,7 @@ def main():
         ax_cos.set_ylabel(r"Mean $d_{\mathrm{Cos}}$", fontsize=10, fontweight="bold")
         ax_cos.set_title(r"32-D Cosine Drift: $1 - \cos(v_i^{(t)\mathrm{aligned}}, v_i^{(0)})$", fontsize=11, fontweight="bold")
         ax_cos.legend(loc="upper left", frameon=True, fontsize=8)
-        ax_cos.set_xticks(all_t)
+        ax_cos.set_xticks(ticks)
 
         # Right Panel 3 (Bottom): 32-D Mean Vector Norm
         ax_norm = fig.add_subplot(gs[2, 1])
@@ -236,7 +265,7 @@ def main():
         ax_norm.set_title(r"32-D Vector Norm Magnitude: $\|v_i^{(t)}\|_2$", fontsize=11, fontweight="bold")
         ax_norm.set_xlabel("Generation (t)", fontsize=10)
         ax_norm.legend(loc="upper left", frameon=True, fontsize=8)
-        ax_norm.set_xticks(all_t)
+        ax_norm.set_xticks(ticks)
 
         buf = io.BytesIO()
         plt.savefig(buf, format="png", bbox_inches="tight")

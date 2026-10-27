@@ -67,6 +67,37 @@ class TestDataset(unittest.TestCase):
         np.testing.assert_array_equal(train_mat.data, 1.0)
         np.testing.assert_array_equal(test_mat.data, 1.0)
 
+    def test_duplicate_user_item_pairs_collapsed(self):
+        """Repeated (user, item) rows collapse to one interaction (keep last)."""
+        dup = pd.concat([
+            self.df,
+            pd.DataFrame([
+                {"user_id": 10, "item_id": 200, "rating": 5.0, "timestamp": 2000},
+            ]),
+        ], ignore_index=True)
+        train_mat, test_mat, u2c, i2c = parse_and_split_dataframe(
+            dup, threshold=4.0, split_ratio=0.8
+        )
+        # User 10 originally had 5 positives; the duplicate must not create a
+        # sixth. 4 train + 1 test remains the total.
+        self.assertEqual(train_mat[u2c[10]].nnz + test_mat[u2c[10]].nnz, 5)
+
+    def test_no_train_test_leakage_and_every_user_has_train(self):
+        """A pair cannot be in both splits and no user may have an empty train row."""
+        # User 30 has only one positive, which the old code put in test only.
+        short = pd.concat([
+            self.df,
+            pd.DataFrame([
+                {"user_id": 30, "item_id": 100, "rating": 5.0, "timestamp": 1000},
+            ]),
+        ], ignore_index=True)
+        train_mat, test_mat, u2c, i2c = parse_and_split_dataframe(
+            short, threshold=4.0, split_ratio=0.8
+        )
+        self.assertEqual(train_mat.multiply(test_mat).nnz, 0)
+        self.assertTrue(np.all(np.diff(train_mat.indptr) > 0))
+        self.assertGreaterEqual(train_mat[u2c[30]].nnz, 1)
+
     def test_dataset_agnostic_custom_columns(self):
         """Test parse_and_split_dataframe with custom dataset column headers."""
         custom_df = self.df.rename(columns={

@@ -76,6 +76,7 @@ class CornacAdapterBase(BaseRecommenderAdapter):
         self.model_kwargs = model_kwargs
         self.model: Optional[Any] = None
         self.dataset: Optional[cornac.data.Dataset] = None
+        self.train_matrix: Optional[sp.csr_matrix] = None
         self.n_users: int = 0
         self.n_items: int = 0
 
@@ -94,6 +95,7 @@ class CornacAdapterBase(BaseRecommenderAdapter):
         np.random.seed(seed)
 
         self.n_users, self.n_items = train_matrix.shape
+        self.train_matrix = train_matrix
         coo = train_matrix.tocoo()
 
         if coo.nnz == 0:
@@ -146,58 +148,16 @@ class CornacAdapterBase(BaseRecommenderAdapter):
             return np.zeros((0, k), dtype=np.int32)
 
         k_arg = min(k, self.n_items)
-        
-        # 1. Fast Batch Scoring Matrix Construction (N_active x N_items)
-        U_g, V_g = self.get_embeddings()
-        if U_g is not None and V_g is not None:
-            score_matrix = U_g[user_indices] @ V_g.T
-        else:
-            score_matrix = np.zeros((n_active, self.n_items), dtype=np.float32)
-            uid_map = self.dataset.uid_map
-            iid_map = self.dataset.iid_map
-            
-            # Construct fast ID lookup array
-            max_internal_i = max(iid_map.values()) if len(iid_map) > 0 else 0
-            i2g_arr = np.full(max_internal_i + 1, -1, dtype=np.int32)
-            for global_i, internal_i in iid_map.items():
-                g_idx = int(global_i)
-                if g_idx < self.n_items:
-                    i2g_arr[internal_i] = g_idx
 
-            # Fast broadcast for models with static item scores (e.g. MostPop)
-            if hasattr(self.model, "item_scores") and self.model.item_scores is not None:
-                item_scores = self.model.item_scores
-                valid_mask = (i2g_arr >= 0) & (np.arange(len(i2g_arr)) < len(item_scores))
-                valid_internal_i = np.where(valid_mask)[0]
-                valid_global_i = i2g_arr[valid_internal_i]
-                
-                single_row_scores = np.zeros(self.n_items, dtype=np.float32)
-                single_row_scores[valid_global_i] = item_scores[valid_internal_i]
-                score_matrix[:] = single_row_scores
-            else:
-                for idx, u in enumerate(user_indices):
-                    u_int = int(u)
-                    if u_int in uid_map:
-                        internal_u = uid_map[u_int]
-                        raw_scores = self.model.score(internal_u)
-                        valid_mask = (i2g_arr >= 0) & (np.arange(len(i2g_arr)) < len(raw_scores))
-                        valid_internal_i = np.where(valid_mask)[0]
-                        score_matrix[idx, i2g_arr[valid_internal_i]] = raw_scores[valid_internal_i]
+        # 1. Full-catalog score matrix (N_active x N_items)
+        score_matrix = self._build_score_matrix(user_indices)
 
-        # 2. Vectorized Remove Seen Items Masking
-        if remove_seen:
-            uid_map = self.dataset.uid_map
-            iid_map = self.dataset.iid_map
-            i2g = {internal_i: int(global_i) for global_i, internal_i in iid_map.items()}
+        # 2. Remove seen items via the canonical sparse train matrix.
+        if remove_seen and self.train_matrix is not None:
             for idx, u in enumerate(user_indices):
-                u_int = int(u)
-                if u_int in uid_map:
-                    internal_u = uid_map[u_int]
-                    user_seen_items = self.dataset.user_data[internal_u][0]
-                    for internal_i in user_seen_items:
-                        global_i = i2g.get(internal_i, None)
-                        if global_i is not None and global_i < self.n_items:
-                            score_matrix[idx, global_i] = -1e9
+                seen_items = self.train_matrix[int(u)].indices
+                if len(seen_items) > 0:
+                    score_matrix[idx, seen_items] = -1e9
 
         # 3. Vectorized Top-K Selection via np.argpartition + argsort
         top_k_part = np.argpartition(-score_matrix, k_arg - 1, axis=1)[:, :k_arg]
@@ -208,11 +168,96 @@ class CornacAdapterBase(BaseRecommenderAdapter):
         # 4. Pad to shape (N_active, K) if k_arg < K
         if k_arg < k:
             pad_width = k - k_arg
-            padding = np.zeros((n_active, pad_width), dtype=np.int32)
+            padding = np.full((n_active, pad_width), -1, dtype=np.int32)
             recs_matrix = np.hstack([recs_matrix, padding])
 
         assert recs_matrix.shape == (n_active, k), f"Recommendation matrix shape misaligned: {recs_matrix.shape}"
+        assert recs_matrix.min() >= -1, "Invalid padding sentinel in recommendations"
         return recs_matrix
+
+    def _build_score_matrix(self, user_indices: np.ndarray) -> np.ndarray:
+        """Construct a dense (N_active, |I|) score matrix in global coordinates."""
+        n_active = len(user_indices)
+        U_g, V_g = self.get_embeddings()
+        if U_g is not None and V_g is not None:
+            scores = (U_g[user_indices] @ V_g.T).astype(np.float32)
+
+            # Cornac MF and PMF learn scalar biases in addition to the factor
+            # dot product. Reproduce the model's own scoring function:
+            #     score(u, i) = u_factors . i_factors + b_u + b_i
+            # Omitting the biases turns MF/PMF into near-random rankers.
+            u_bias = getattr(self.model, "u_biases", None)
+            if u_bias is not None:
+                u_bias = np.asarray(u_bias).ravel()
+                u_bias_global = np.zeros(self.n_users, dtype=np.float32)
+                for global_u, internal_u in self.model.train_set.uid_map.items():
+                    if int(global_u) < self.n_users:
+                        u_bias_global[int(global_u)] = u_bias[internal_u]
+                scores += u_bias_global[user_indices, None]
+
+            i_bias = getattr(self.model, "i_biases", None)
+            if i_bias is not None:
+                i_bias = np.asarray(i_bias).ravel()
+                i_bias_global = np.zeros(self.n_items, dtype=np.float32)
+                for global_i, internal_i in self.model.train_set.iid_map.items():
+                    if int(global_i) < self.n_items:
+                        i_bias_global[int(global_i)] = i_bias[internal_i]
+                scores += i_bias_global[None, :]
+
+            # Cornac only learns factors for items observed in D_t. Items that
+            # are absent from training must not be treated as zero-scored
+            # candidates; mask them out of ranking and evaluation.
+            known_items = np.zeros(self.n_items, dtype=bool)
+            for global_i in self.model.train_set.iid_map:
+                if int(global_i) < self.n_items:
+                    known_items[int(global_i)] = True
+            scores[:, ~known_items] = -np.inf
+
+            return scores.astype(np.float32)
+
+        score_matrix = np.zeros((n_active, self.n_items), dtype=np.float32)
+
+        # Non-latent baselines: MostPop has a single global popularity vector.
+        # Cornac exposes item_scores as None for MostPop in 3.x, so derive the
+        # vector directly from the canonical train matrix instead of relying on
+        # private model attributes.
+        if getattr(self.model, "item_scores", None) is not None:
+            pop = np.asarray(self.train_matrix.sum(axis=0)).flatten().astype(np.float32)
+            score_matrix[:] = pop
+            return score_matrix
+        if self.model_cls is cornac.models.MostPop:
+            pop = np.asarray(self.train_matrix.sum(axis=0)).flatten().astype(np.float32)
+            score_matrix[:] = pop
+            return score_matrix
+
+        # Generic non-latent fallback (e.g. UserKNN).
+        uid_map = self.dataset.uid_map
+        iid_map = self.dataset.iid_map
+        max_internal_i = max(iid_map.values()) if len(iid_map) > 0 else 0
+        i2g_arr = np.full(max_internal_i + 1, -1, dtype=np.int32)
+        for global_i, internal_i in iid_map.items():
+            g_idx = int(global_i)
+            if g_idx < self.n_items:
+                i2g_arr[internal_i] = g_idx
+
+        for idx, u in enumerate(user_indices):
+            u_int = int(u)
+            if u_int in uid_map:
+                raw_scores = self.model.score(uid_map[u_int])
+                valid_mask = (i2g_arr >= 0) & (np.arange(len(i2g_arr)) < len(raw_scores))
+                valid_internal_i = np.where(valid_mask)[0]
+                score_matrix[idx, i2g_arr[valid_internal_i]] = raw_scores[valid_internal_i]
+
+        return score_matrix
+
+    def score_all(self, user_indices: np.ndarray) -> np.ndarray:
+        """Return real full-catalog scores of shape (len(user_indices), |I|)."""
+        if self.model is None or self.dataset is None:
+            raise RuntimeError("Adapter model has not been fitted yet. Call fit() first.")
+        scores = self._build_score_matrix(np.asarray(user_indices, dtype=np.int64))
+        assert scores.shape == (len(user_indices), self.n_items)
+        assert not np.isnan(scores).any(), "NaN detected in full-catalog scores"
+        return scores
 
     def get_embeddings(self) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         """
@@ -243,8 +288,16 @@ class CornacMFAdapter(CornacAdapterBase):
 
 
 class CornacBPRAdapter(CornacAdapterBase):
-    """Cornac Bayesian Personalized Ranking (BPR) Recommender Adapter."""
+    """Cornac Bayesian Personalized Ranking (BPR) Recommender Adapter.
+
+    Uses the standard bias-free BPR-MF formulation (Rendle et al., 2009):
+        score(u, i) = u_factors . i_factors
+    Cornac's BPR defaults to ``use_bias=True``, which lets scalar item biases
+    absorb popularity and turns the model into a de facto popularity ranker.
+    Disabling biases keeps the pairwise-ranking comparison architectural.
+    """
     def __init__(self, dim: int = 32, max_iter: int = 20, learning_rate: float = 0.01, **kwargs):
+        kwargs.setdefault("use_bias", False)
         super().__init__(
             model_cls=cornac.models.BPR, 
             dim=dim, 

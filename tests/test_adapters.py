@@ -2,9 +2,10 @@ import unittest
 import numpy as np
 import scipy.sparse as sp
 from src.adapters.cornac_adapters import (
-    CornacMFAdapter, 
-    CornacBPRAdapter, 
-    CornacUserKNNAdapter, 
+    CornacMFAdapter,
+    CornacPMFAdapter,
+    CornacBPRAdapter,
+    CornacUserKNNAdapter,
     CornacMostPopAdapter
 )
 
@@ -77,6 +78,34 @@ class TestAdapters(unittest.TestCase):
         U_global, V_global = adapter.get_embeddings()
         self.assertIsNone(U_global)
         self.assertIsNone(V_global)
+
+    def test_latent_adapters_include_biases_and_mask_cold_items(self):
+        """score_all must reproduce Cornac's own score (including biases)."""
+        rows = [0, 0, 1, 1, 2, 2]
+        cols = [0, 1, 1, 2, 3, 4]
+        data = [1.0] * 6
+        # Item 5 has no interactions and therefore no learned factors.
+        train_mat = sp.csr_matrix(
+            (data, (rows, cols)), shape=(3, 6), dtype=np.float32
+        )
+
+        for adapter_cls in (CornacMFAdapter, CornacPMFAdapter, CornacBPRAdapter):
+            adapter = adapter_cls(dim=self.dim, max_iter=10).fit(train_mat, seed=42)
+            scores = adapter.score_all(np.array([0, 1, 2], dtype=np.int32))
+
+            # Cold item must be excluded from ranking, not zero-scored.
+            self.assertTrue(np.all(np.isneginf(scores[:, 5])))
+
+            item_ids = np.asarray(adapter.model.item_ids)
+            for internal_u in range(3):
+                direct = adapter.model.score(internal_u)
+                reconstructed = scores[internal_u, item_ids]
+                # MF adds a constant offset to its score; ranking is unchanged.
+                np.testing.assert_allclose(
+                    reconstructed - reconstructed.mean(),
+                    direct - direct.mean(),
+                    atol=1e-4,
+                )
 
     def test_deterministic_reproducibility(self):
         """Test that passing identical seeds produces identical top-K recommendations."""

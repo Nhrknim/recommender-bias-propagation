@@ -24,7 +24,8 @@ This directory contains the theoretical foundations, empirical notes, mathematic
 ### 3. Phase 3: Embedding Geometry & Representation Collapse
 * [**phase3_representation_geometry.md**](./phase3_representation_geometry.md)
   * Empirical study on item representation geometry under collaborative filtering.
-  * Pointwise gradient starvation (origin collapse) vs. pairwise ranking push (periphery dispersion).
+  * Pointwise gradient starvation (origin collapse) vs. pairwise ranking dynamics.
+  * BPR geometry observations here predate the bias-free/scoring fixes and are superseded by Phase 4.
   * Popularity tier stratification (Head, Torso, Tail) and norm distribution shifts.
 * [**phase3_beginners_guide.md**](./phase3_beginners_guide.md)
   * Conceptual guide explaining the "Popularity Trap", why algorithms ignore hidden gems, and embedding space dynamics.
@@ -35,7 +36,7 @@ This directory contains the theoretical foundations, empirical notes, mathematic
   * 4-tier benchmark trajectory dynamics ($G$, $D_{\text{KL}}$, $NDCG@10$, $S_{\text{eff}}$) comparing MF, PMF, BPR, MostPop, and LightGCN.
   * 2D t-SNE latent space maps showing popularity gravity traps with dual drift vectors (Top-30 red vs. Bottom-30 blue), genre blurring, and manifold density collapse.
   * Full **32-dimensional quantitative embedding drift analysis**: Euclidean drift (odometer), Cosine drift (compass), and Vector Norm magnitude (megaphone) across popularity tiers.
-  * Complete image breakdowns and direct links to all generated visual assets and 50-frame dynamic GIFs across BPR, MF, and PMF.
+  * Complete image breakdowns and direct links to the per-model 2D t-SNE maps for BPR, MF, and PMF.
 
 
 ### 5. Phase 5: LightGCN — Graph-Powered Bias Amplification
@@ -43,19 +44,23 @@ This directory contains the theoretical foundations, empirical notes, mathematic
   * Introduction of **LightGCN** as the first graph neural recommender in the closed-loop study.
   * Theoretical validation of the **Graph Centrality Hypothesis**: bipartite degree centrality creates a structural bias engine absent in matrix factorization models.
   * 5-model 50-generation benchmark comparison (MF, PMF, BPR, MostPop, LightGCN) with empirical $\pm 1\sigma$ error bands and unified bottom legend.
-  * Deep dive on the **"Illusion of Personalization"**: why LightGCN's macro trajectories (Gini, KL drift, NDCG) track MostPop almost identically in Tiers 1–3, while diverging sharply in Tier 4 latent effective rank collapse ($S_{\text{eff}} = 17.96 \to 8.45$).
-  * Full **50-generation long-horizon simulation** ($t=0 \dots 49$): $>53\%$ collapse in latent effective rank and $5.23\times$ asymmetric drift velocity ratio (short-tail $1.155$ vs long-tail $0.221$).
+  * Deep dive on the **"Illusion of Personalization"**: why LightGCN's macro trajectories (Gini, KL drift, NDCG) track MostPop almost identically in Tiers 1–3, while diverging sharply in Tier 4 latent effective rank collapse ($S_{\text{eff}} = 18.00 \to 8.45$).
+  * Full **50-generation long-horizon simulation** ($t=0 \dots 49$): $53.0\%$ collapse in latent effective rank and a $5.07\times$ asymmetric Euclidean drift ratio (short-tail $1.272$ vs. long-tail $0.251$).
   * 2D t-SNE maps ($t=0$ vs $t=49$) with dual drift arrows (Top-30 red vs Bottom-30 blue) and isolated colorbar, genre cluster homogenisation, KDE density singularity, and two 50-frame dynamic GIFs generated from 100% real measured states.
 
 ### 6. Phase 6: LightFM — Pairwise Ranking & WARP Loss Dynamics
 * [**phase6_lightfm.md**](./phase6_lightfm.md)
   * Introduction of **LightFM** and evaluation of **WARP (Weighted Approximate-Rank Pairwise)** loss vs. standard **BPR** in the closed loop.
-  * Theoretical and empirical validation of WARP's **two built-in brakes**: scalar item biases absorbing raw popularity and adaptive rejection sampling acting as a gradient shut-off switch.
-  * In-depth clustering comparison: why LightFM prevented blockbusters from collapsing into an ultra-dense singularity, preserving genre separation.
-  * 4-tier benchmark metrics across 10 generations: WARP delivers **+29.7% higher NDCG@10** than BPR ($0.0672$ vs $0.0518$) and maintains **$G = 0.9212$** with only a **0.73%** graceful spectral contraction ($S_{\text{eff}} = 29.70 \to 29.49$).
+  * Theoretical and empirical assessment of WARP's **two built-in brakes**: scalar item biases absorbing raw popularity and adaptive rejection sampling acting as a gradient shut-off switch.
+  * In-depth clustering comparison: WARP limits spectral contraction and exposure concentration relative to LightFM BPR, although both arms still lose about 61% of baseline NDCG@10.
+  * 4-tier benchmark metrics across 50 generations: WARP delivers **+21.9% higher NDCG@10** than LightFM BPR ($0.0367$ vs $0.0301$) and maintains **$G = 0.8530$** with a **4.90%** spectral contraction ($S_{\text{eff}} = 29.96 \to 28.49$).
   * 2D t-SNE drift maps, genre boundary preservation, KDE density contours, and two dynamic trajectory animations (GIFs) tracking live 32-D quantitative drift metrics across popularity cohorts.
 
-### 7. Theoretical Foundations & Closed-Loop Mechanics
+### 7. Engineering Correctness
+* [**correctness_fixes.md**](./correctness_fixes.md)
+  * Summary of the audited defects fixed across data splitting, adapters, simulator indexing, metrics, and figure generation.
+
+### 8. Theoretical Foundations & Closed-Loop Mechanics
 * [**bias_propagation_and_embedding_dynamics.md**](./bias_propagation_and_embedding_dynamics.md)
   * Formal distinction between static algorithmic bias vs. dynamic closed-loop bias amplification.
   * 4-step closed-loop serving architecture: Candidate Recommendation $\to$ Vectorized Click Simulation $\to$ Buffer Ingestion $\to$ Cold Retraining.

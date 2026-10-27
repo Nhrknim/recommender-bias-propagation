@@ -26,12 +26,12 @@ The project combines empirical data preparation, multi-model benchmarking using 
 - Extracts user and item embedding representations in 32-dimensional latent space across head, mid, and long-tail movie item cohorts.
 - Identifies critical model-specific algorithmic failure modes:
   - **Pointwise MF:** Suffers from *gradient starvation* on sparse long-tail items, leading to *origin collapse* ($\|v_0\|_2 \to 0$).
-  - **Pairwise BPR:** Driven by *negative sampling push*, scattering unobserved long-tail items into high-norm *periphery dispersion*.
+  - **Pairwise BPR:** Uniform negative sampling adds false-negative noise. Under the corrected bias-free configuration, BPR is popularity-dominated from $t=0$ and does **not** disperse the long tail (see Phase 4).
   - **PMF:** Uses a zero-mean Gaussian prior to constrain embedding magnitudes, suppressing extreme norm variance.
 - Visualizes latent geometric structures using PCA and t-SNE projections.
 
 ### Phase 4 / System Implementation: Closed-Loop Simulator Architecture
-- Fully implemented and verified all 5 core modular closed-loop simulation subsystems (`src/`) specified in [`SPEC.md`](SPEC.md) with **23 unit tests** passing OK:
+- Fully implemented and verified all 5 core modular closed-loop simulation subsystems (`src/`) specified in [`SPEC.md`](SPEC.md) with **64 unit tests** passing OK:
   - **Subsystem 1 (`src/data/`):** Invariant State & Data Buffer — Dataset-agnostic loaders (`load_dataset`, `load_movielens_1m`, `load_movielens_genres`), continuous zero-indexing, dual-matrix interaction accumulation ($\mathcal{D}_t$), and buffer merge/deduplication.
   - **Subsystem 2 (`src/adapters/`):** Architecture-Agnostic Recommender Interface — Abstract facade adapters (`BaseRecommenderAdapter`, `CornacMFAdapter`, `CornacBPRAdapter`, `CornacUserKNNAdapter`, `CornacMostPopAdapter`, `LightGCNAdapter`) with coordinate alignment and deterministic seeding.
   - **Subsystem 3 (`src/engine/`):** Vectorized User Interaction Engine — Vectorized position decay exposure, temperature-scaled intrinsic relevance, sub-linear logarithmic conformity, and Poisson session budget truncation ($\lambda=3.0$).
@@ -42,8 +42,8 @@ The project combines empirical data preparation, multi-model benchmarking using 
 - Implements **LightGCN** (He et al., KDD 2020) as the first graph-based model in the closed-loop simulator, fully conforming to `BaseRecommenderAdapter`.
 - Introduces 3-layer symmetric normalised adjacency propagation ($D^{-1/2}AD^{-1/2}$) over the user-item bipartite graph, with mean-pooled final embeddings trained via BPR loss.
 - Demonstrates the **Graph Centrality Hypothesis**: popular items with high bipartite degree receive stronger propagated gradient signals, creating a structural popularity amplification loop absent in MF-family models.
-- Auto-selects compute device: **MPS (Apple Silicon) > CUDA > CPU**.
-- Ships with **13 unit tests** covering shapes, NaN guards, determinism, edge cases, and numerical stability (`tests/test_lightgcn_adapter.py`).
+- Auto-selects compute device: **CUDA > CPU** (pass `device="mps"` explicitly on Apple Silicon if desired).
+- Ships with **18 unit tests** covering shapes, NaN guards, determinism, edge cases, and numerical stability (`tests/test_lightgcn_adapter.py`).
 - Adds companion research documentation: [`docs/notes/phase5_lightgcn.md`](docs/notes/phase5_lightgcn.md) and visual asset catalog entry [`docs/images/phase_5_lightgcn/`](docs/images/phase_5_lightgcn/).
 
 ---
@@ -85,7 +85,6 @@ The project combines empirical data preparation, multi-model benchmarking using 
 │   └── papers/                               # Literature references and PDF papers
 ├── SPEC.md                                   # System engineering specification for simulator
 ├── SPEC_HELPER.md                            # Theoretical companion & architectural onboarding
-├── PLAN.md                                   # System engineering ground-of-truth plan
 ├── AGENT.md                                  # Quality control & engineering standards
 ├── requirements.txt                          # Environment dependencies
 └── README.md                                 # Project overview (this file)
@@ -101,7 +100,7 @@ Always use the Python virtual environment (`venv`):
 # 1. Automated Setup (creates venv, installs requirements.txt, and activates)
 source scripts/setup_venv.sh
 
-# 2. Run Automated Unit Test Suite (23 tests across 5 subsystems)
+# 2. Run Automated Unit Test Suite (64 tests across 5 subsystems)
 python -m unittest discover tests
 
 # 3. Execute Full Closed-Loop Capability Benchmark
@@ -115,7 +114,6 @@ python scripts/run_full_benchmark.py
 ### System Specifications & Engineering Guides
 - **Simulator Specification**: [`SPEC.md`](SPEC.md)
 - **Architecture & Onboarding Companion**: [`SPEC_HELPER.md`](SPEC_HELPER.md)
-- **System Engineering Plan**: [`PLAN.md`](PLAN.md)
 - **Engineering Standards**: [`AGENT.md`](AGENT.md)
 - **Latest Benchmark Results**: [`docs/benchmarks/benchmark_results.md`](docs/benchmarks/benchmark_results.md) (Generated locally by `scripts/run_full_benchmark.py`)
 - **Benchmark Run Directory**: [`docs/benchmarks/`](docs/benchmarks/)
@@ -142,7 +140,7 @@ python scripts/run_full_benchmark.py
 - **Visual Assets & Trajectory Figures**: [`docs/images/`](docs/images/)
 
 ### Publications & Manuscripts
-- **LaTeX Manuscript**: [`docs/tex/zeroth.tex`](docs/tex/zeroth.tex)
-- **Presentation Deck**: [`docs/ppt/Zeroth.pdf`](docs/ppt/Zeroth.pdf)
+- **LaTeX Manuscript**: [`docs/ppt/Zeroth/zeroth.tex`](docs/ppt/Zeroth/zeroth.tex)
+- **Presentation Deck**: [`docs/ppt/Zeroth/Zeroth.pdf`](docs/ppt/Zeroth/Zeroth.pdf)
 - **Reference Literature**: [`docs/papers/`](docs/papers/)
 

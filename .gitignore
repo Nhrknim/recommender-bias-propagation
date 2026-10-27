@@ -241,6 +241,10 @@ docs/benchmarks/*
 !docs/benchmarks/.gitkeep
 !docs/benchmarks/benchmark_results.md
 !docs/benchmarks/lightgcn_50gen_trajectory.json
+# Published final artifacts referenced by the notes
+!docs/benchmarks/run_20261027_170352_60a757.json
+!docs/benchmarks/lightfm_run_20261027_160811_c80465.json
+!docs/benchmarks/lightfm_quantitative_drift_metrics.json
 .DS_Store
 
 

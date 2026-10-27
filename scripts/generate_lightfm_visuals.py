@@ -14,7 +14,10 @@ sys.path.insert(0, ".")
 from src.data.dataset import load_movielens_1m, load_movielens_genres
 from src.adapters.lightfm_adapter import LightFMAdapter
 from src.data.buffer import merge_and_deduplicate
+from src.engine.anchor import build_shared_anchor
 from src.engine.simulator import simulate_user_clicks
+from src.metrics.geometry import compute_reflection_corrected_procrustes
+from scripts.plot_results import find_lightfm_benchmark_json
 
 
 def generate_benchmark_trajectories_plot(json_path: str, output_path: str):
@@ -25,9 +28,15 @@ def generate_benchmark_trajectories_plot(json_path: str, output_path: str):
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    summary = data["summary"]
+    summary = data.get("summary") or data.get("results")
+    if summary is None:
+        raise KeyError("LightFM benchmark JSON has neither 'summary' nor 'results'")
     generations = data["generations"]
     t_steps = list(range(generations))
+    tick_step = max(1, generations // 10)
+    ticks = list(range(0, generations, tick_step))
+    if ticks[-1] != generations - 1:
+        ticks.append(generations - 1)
 
     palette = {
         "LightFM (WARP)": "#1f77b4",  # Blue
@@ -49,7 +58,7 @@ def generate_benchmark_trajectories_plot(json_path: str, output_path: str):
     ax1.set_xlabel("Generation ($t$)", fontsize=11)
     ax1.set_ylabel("Gini Coefficient ($G$)", fontsize=11)
     ax1.legend(loc="best", frameon=True)
-    ax1.set_xticks(t_steps)
+    ax1.set_xticks(ticks)
 
     # Panel 2: User Genre Taste Drift (D_KL)
     ax2 = axes[0, 1]
@@ -63,7 +72,7 @@ def generate_benchmark_trajectories_plot(json_path: str, output_path: str):
     ax2.set_xlabel("Generation ($t$)", fontsize=11)
     ax2.set_ylabel("Mean $D_{\\text{KL}}$ Divergence", fontsize=11)
     ax2.legend(loc="best", frameon=True)
-    ax2.set_xticks(t_steps)
+    ax2.set_xticks(ticks)
 
     # Panel 3: Recommendation Accuracy (NDCG@10)
     ax3 = axes[1, 0]
@@ -77,7 +86,7 @@ def generate_benchmark_trajectories_plot(json_path: str, output_path: str):
     ax3.set_xlabel("Generation ($t$)", fontsize=11)
     ax3.set_ylabel("NDCG@10 Utility", fontsize=11)
     ax3.legend(loc="best", frameon=True)
-    ax3.set_xticks(t_steps)
+    ax3.set_xticks(ticks)
 
     # Panel 4: Latent Manifold Effective Rank (S_eff)
     ax4 = axes[1, 1]
@@ -91,7 +100,7 @@ def generate_benchmark_trajectories_plot(json_path: str, output_path: str):
     ax4.set_xlabel("Generation ($t$)", fontsize=11)
     ax4.set_ylabel("Effective Spectral Rank $S_{\\text{eff}}$", fontsize=11)
     ax4.legend(loc="best", frameon=True)
-    ax4.set_xticks(t_steps)
+    ax4.set_xticks(ticks)
 
     plt.tight_layout()
     plt.savefig(output_path, dpi=200, bbox_inches="tight")
@@ -99,9 +108,9 @@ def generate_benchmark_trajectories_plot(json_path: str, output_path: str):
     print(f"[OK] Saved trajectory dashboard: {output_path}")
 
 
-def generate_tsne_manifold_plots(output_dir: str):
+def generate_tsne_manifold_plots(output_dir: str, generations: int = 50):
     """
-    Fits LightFM WARP at t=0 and t=9, computes joint t-SNE projections,
+    Fits LightFM WARP at t=0 and t=T-1, computes joint t-SNE projections,
     and generates Popularity Drift, Genre Homogenization, and Manifold Density maps.
     """
     os.makedirs(output_dir, exist_ok=True)
@@ -126,27 +135,30 @@ def generate_tsne_manifold_plots(output_dir: str):
                 g_list = str(row["genres"]).split("|")
                 primary_genres[code] = g_list[0] if len(g_list) > 0 else "Other"
 
+    # Model-independent click anchor, frozen across the whole run.
+    print("[Phase 1b] Building shared truncated-SVD click anchor...")
+    U_anchor, V_anchor = build_shared_anchor(train_mat, dim=32, seed=42)
+
     # 1. Train initial baseline t=0
     print("[Phase 2] Training LightFM (WARP) Baseline at t=0...")
     adapter_0 = LightFMAdapter(dim=32, loss="warp", epochs=5, learning_rate=0.005)
     adapter_0.fit(train_mat, seed=42)
     U_0, V_0 = adapter_0.get_embeddings()
 
-    # 2. Simulate 9 generations of closed feedback loop to obtain t=9
-    print("[Phase 3] Running 9 closed-loop generations to obtain t=9 state...")
+    # 2. Simulate closed feedback loop to obtain t=T-1
+    print(f"[Phase 3] Running {generations - 1} closed-loop generations to obtain t={generations - 1}...")
     D_t = train_mat.copy()
     active_users = np.arange(n_users, dtype=np.int32)
-    U_star = U_0.copy()
-    V_star = V_0.copy()
 
-    for t in range(9):
+    for t in range(generations - 1):
         recs = adapter_0.recommend(active_users, k=10, remove_seen=True)
         pop_counts = np.asarray(D_t.sum(axis=0)).flatten()
         u_clicks, i_clicks = simulate_user_clicks(
             recs=recs,
-            U_star=U_star,
-            V_star=V_star,
+            U_star=U_anchor,
+            V_star=V_anchor,
             pop_counts=pop_counts,
+            user_indices=active_users,
             alpha=0.8,
             tau=1.0,
             seed=42 + t
@@ -155,16 +167,20 @@ def generate_tsne_manifold_plots(output_dir: str):
         adapter_0 = LightFMAdapter(dim=32, loss="warp", epochs=5, learning_rate=0.005)
         adapter_0.fit(D_t, seed=42 + t + 1)
 
-    U_9, V_9 = adapter_0.get_embeddings()
+    U_final, V_final = adapter_0.get_embeddings()
+
+    # t-SNE is not rotation-invariant. Align the final manifold to t=0.
+    V_final_aligned = compute_reflection_corrected_procrustes(V_0, V_final)
+    t_final = generations - 1
 
     # 3. Compute Joint t-SNE 2D manifold projection
-    print("[Phase 4] Computing Joint 2D t-SNE Projection across (V_0, V_9)...")
-    joint_embeddings = np.vstack([V_0, V_9])
+    print(f"[Phase 4] Computing Joint 2D t-SNE Projection across (V_0, V_{t_final})...")
+    joint_embeddings = np.vstack([V_0, V_final_aligned])
     tsne = TSNE(n_components=2, perplexity=30, learning_rate="auto", init="pca", random_state=42)
     joint_2d = tsne.fit_transform(joint_embeddings)
 
     proj_0 = joint_2d[:n_items]
-    proj_9 = joint_2d[n_items:]
+    proj_final = joint_2d[n_items:]
 
     # Base popularity counts
     base_pop = np.asarray(train_mat.sum(axis=0)).flatten()
@@ -182,18 +198,18 @@ def generate_tsne_manifold_plots(output_dir: str):
     axes[0].set_ylabel("t-SNE Dimension 2", fontsize=11)
     fig.colorbar(sc0, ax=axes[0], label="Log1p(Popularity Interaction Count)")
 
-    # t=9 with drift arrows
-    sc9 = axes[1].scatter(proj_9[:, 0], proj_9[:, 1], c=log_pop, cmap="viridis", s=18, alpha=0.75)
+    # t=T-1 with drift arrows
+    sc9 = axes[1].scatter(proj_final[:, 0], proj_final[:, 1], c=log_pop, cmap="viridis", s=18, alpha=0.75)
     for idx in top50_items:
         x0, y0 = proj_0[idx]
-        x1, y1 = proj_9[idx]
+        x1, y1 = proj_final[idx]
         axes[1].annotate(
             "",
             xy=(x1, y1),
             xytext=(x0, y0),
             arrowprops=dict(arrowstyle="->", color="red", lw=1.2, alpha=0.8)
         )
-    axes[1].set_title("LightFM (WARP): Post-Feedback Drift ($t=9$)\nRed Arrows: Top-50 Popular Hits Movement", fontsize=14, fontweight="bold")
+    axes[1].set_title(f"LightFM (WARP): Post-Feedback Drift ($t={t_final}$)\nRed Arrows: Top-50 Popular Hits Movement", fontsize=14, fontweight="bold")
     axes[1].set_xlabel("t-SNE Dimension 1", fontsize=11)
     axes[1].set_ylabel("t-SNE Dimension 2", fontsize=11)
     fig.colorbar(sc9, ax=axes[1], label="Log1p(Popularity Interaction Count)")
@@ -216,14 +232,14 @@ def generate_tsne_manifold_plots(output_dir: str):
     for g in unique_labels:
         mask = [cg == g for cg in clean_genres]
         axes[0].scatter(proj_0[mask, 0], proj_0[mask, 1], label=g, color=genre2color[g], s=18, alpha=0.7)
-        axes[1].scatter(proj_9[mask, 0], proj_9[mask, 1], label=g, color=genre2color[g], s=18, alpha=0.7)
+        axes[1].scatter(proj_final[mask, 0], proj_final[mask, 1], label=g, color=genre2color[g], s=18, alpha=0.7)
 
     axes[0].set_title("LightFM (WARP): Baseline Genre Manifold ($t=0$)", fontsize=14, fontweight="bold")
     axes[0].set_xlabel("t-SNE Dimension 1", fontsize=11)
     axes[0].set_ylabel("t-SNE Dimension 2", fontsize=11)
     axes[0].legend(loc="upper right", markerscale=2, fontsize=9)
 
-    axes[1].set_title("LightFM (WARP): 10-Gen Post-Feedback Genre Manifold ($t=9$)", fontsize=14, fontweight="bold")
+    axes[1].set_title(f"LightFM (WARP): Post-Feedback Genre Manifold ($t={t_final}$)", fontsize=14, fontweight="bold")
     axes[1].set_xlabel("t-SNE Dimension 1", fontsize=11)
     axes[1].set_ylabel("t-SNE Dimension 2", fontsize=11)
     axes[1].legend(loc="upper right", markerscale=2, fontsize=9)
@@ -244,9 +260,9 @@ def generate_tsne_manifold_plots(output_dir: str):
     axes[0].set_xlabel("t-SNE Dimension 1", fontsize=11)
     axes[0].set_ylabel("t-SNE Dimension 2", fontsize=11)
 
-    sns.kdeplot(x=proj_9[:, 0], y=proj_9[:, 1], ax=axes[1], cmap="Reds", fill=True, thresh=0.05, levels=15)
-    axes[1].scatter(proj_9[:, 0], proj_9[:, 1], color="#d62728", s=5, alpha=0.25)
-    axes[1].set_title("LightFM (WARP): 10-Gen Concentrated Manifold Density ($t=9$)", fontsize=14, fontweight="bold")
+    sns.kdeplot(x=proj_final[:, 0], y=proj_final[:, 1], ax=axes[1], cmap="Reds", fill=True, thresh=0.05, levels=15)
+    axes[1].scatter(proj_final[:, 0], proj_final[:, 1], color="#d62728", s=5, alpha=0.25)
+    axes[1].set_title(f"LightFM (WARP): Post-Feedback Manifold Density ($t={t_final}$)", fontsize=14, fontweight="bold")
     axes[1].set_xlabel("t-SNE Dimension 1", fontsize=11)
     axes[1].set_ylabel("t-SNE Dimension 2", fontsize=11)
 
@@ -258,20 +274,23 @@ def generate_tsne_manifold_plots(output_dir: str):
 
 
 def main():
-    json_path = "docs/benchmarks/lightfm_run_20261024_210634_775a03.json"
-    output_dir = "docs/images/lightfm"
+    json_path = find_lightfm_benchmark_json()
+    with open(json_path, "r", encoding="utf-8") as f:
+        generations = int(json.load(f)["generations"])
+    output_dir = "docs/images/phase_6_lightfm"
     os.makedirs(output_dir, exist_ok=True)
 
     print("=" * 80)
     print("  GENERATING LIGHTFM VISUAL DIAGNOSTIC DASHBOARD & TSNE MAPS")
     print("=" * 80)
+    print(f"  Benchmark JSON: {json_path} (T={generations})")
 
     # 1. 4-Panel Benchmark Metric Trajectory Dashboard
     trajectory_img = os.path.join(output_dir, "benchmark_trajectories.png")
     generate_benchmark_trajectories_plot(json_path, trajectory_img)
 
     # 2. 2D t-SNE Manifold Projections (Popularity, Genre, Density)
-    generate_tsne_manifold_plots(output_dir)
+    generate_tsne_manifold_plots(output_dir, generations=generations)
 
     print("\n[SUCCESS] All LightFM visual diagnostic assets generated in:", output_dir)
 

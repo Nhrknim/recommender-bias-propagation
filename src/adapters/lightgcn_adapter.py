@@ -66,6 +66,8 @@ class LightGCNModel(nn.Module):
         """
         n_total = self.n_users + self.n_items
         coo = interact_mat.tocoo()
+        # Collapse duplicate coordinates so parallel edges cannot inflate degrees.
+        coo.sum_duplicates()
 
         # Build symmetric block: user->item edges and item->user edges
         rows = np.concatenate([coo.row, coo.col + self.n_users])
@@ -265,10 +267,21 @@ class LightGCNAdapter(BaseRecommenderAdapter):
         all_users = coo.row.astype(np.int64)   # Shape: (nnz,)
         all_items = coo.col.astype(np.int64)   # Shape: (nnz,)
 
-        # Pre-build per-user seen-item sets for O(1) rejection sampling
-        user_seen: list[set] = [set() for _ in range(self.n_users)]
-        for u, i in zip(all_users, all_items):
-            user_seen[u].add(int(i))
+        # Flat sorted positive keys (u * |I| + i) for vectorised membership checks.
+        positive_keys = np.sort(all_users * self.n_items + all_items)
+        seen_counts = np.bincount(all_users, minlength=self.n_users)
+
+        def is_positive(users: np.ndarray, items: np.ndarray) -> np.ndarray:
+            """Boolean mask of (user, item) pairs that exist in D_t."""
+            users = np.asarray(users, dtype=np.int64)
+            items = np.asarray(items, dtype=np.int64)
+            if users.ndim == 1 and items.ndim == 1:
+                keys = users * self.n_items + items
+            else:
+                keys = users[..., None] * self.n_items + items
+            flat = keys.ravel()
+            loc = np.clip(np.searchsorted(positive_keys, flat), 0, len(positive_keys) - 1)
+            return (positive_keys[loc] == flat).reshape(keys.shape)
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
 
@@ -279,20 +292,39 @@ class LightGCNAdapter(BaseRecommenderAdapter):
             for start in range(0, len(idx), self.batch_size):
                 batch = idx[start : start + self.batch_size]
 
-                u_batch = torch.tensor(all_users[batch], device=self.device)
-                pos_batch = torch.tensor(all_items[batch], device=self.device)
+                u_np = all_users[batch]
+                pos_np = all_items[batch]
 
-                # Vectorised negative sampling:
-                # 1. Sample the entire batch at once (one numpy call, no Python loop)
-                # 2. Only fall back to per-item retry for the rare collision cases
-                #    (|seen|/|I| ≈ 0.001 on ML-1M → ~0.1% of items need a retry)
-                neg_items = np.random.randint(0, self.n_items, size=len(batch))
-                for k in range(len(batch)):
-                    u = int(all_users[batch[k]])
-                    seen = user_seen[u]
-                    while neg_items[k] in seen:
-                        neg_items[k] = np.random.randint(0, self.n_items)
-                neg_batch = torch.tensor(neg_items, device=self.device)
+                # A user who has interacted with the entire catalog has no valid
+                # negative. Skip those rows instead of looping forever.
+                sampleable = seen_counts[u_np] < self.n_items
+                if not np.any(sampleable):
+                    continue
+                u_np = u_np[sampleable]
+                pos_np = pos_np[sampleable]
+
+                # Vectorised uniform sampling followed by bounded rejection.
+                neg_np = np.random.randint(0, self.n_items, size=len(u_np))
+                for _retry in range(20):
+                    invalid = is_positive(u_np, neg_np)
+                    n_invalid = int(invalid.sum())
+                    if n_invalid == 0:
+                        break
+                    neg_np[invalid] = np.random.randint(0, self.n_items, size=n_invalid)
+                invalid = is_positive(u_np, neg_np)
+                valid = ~invalid
+                if not np.any(valid):
+                    continue
+                u_np = u_np[valid]
+                pos_np = pos_np[valid]
+                neg_np = neg_np[valid]
+
+                assert not is_positive(u_np, neg_np).any(), \
+                    "LightGCN selected a positive item as a negative"
+
+                u_batch = torch.tensor(u_np, device=self.device)
+                pos_batch = torch.tensor(pos_np, device=self.device)
+                neg_batch = torch.tensor(neg_np, device=self.device)
 
                 optimizer.zero_grad()
                 loss = self.model.bpr_loss(
@@ -348,7 +380,7 @@ class LightGCNAdapter(BaseRecommenderAdapter):
         k_arg = min(k, self.n_items)
 
         # 1. Vectorised batch scoring: (N_active, d) @ (d, |I|) -> (N_active, |I|)
-        score_matrix = self._U[user_indices] @ self._V.T  # (N_active, n_items)
+        score_matrix = self.score_all(user_indices)  # (N_active, n_items)
 
         # 2. Mask seen items — vectorised over sparse row slices
         if remove_seen and self._train_matrix is not None:
@@ -367,12 +399,23 @@ class LightGCNAdapter(BaseRecommenderAdapter):
         # 4. Pad to shape (N_active, K) if catalog smaller than K
         if k_arg < k:
             pad_width = k - k_arg
-            padding = np.zeros((n_active, pad_width), dtype=np.int32)
+            padding = np.full((n_active, pad_width), -1, dtype=np.int32)
             recs_matrix = np.hstack([recs_matrix, padding])
 
         assert recs_matrix.shape == (n_active, k), \
             f"Recommendation matrix shape misaligned: {recs_matrix.shape}"
+        assert recs_matrix.min() >= -1, "Invalid padding sentinel in recommendations"
         return recs_matrix
+
+    def score_all(self, user_indices: np.ndarray) -> np.ndarray:
+        """Return real full-catalog scores of shape (len(user_indices), |I|)."""
+        if self._U is None or self._V is None:
+            raise RuntimeError("LightGCNAdapter has not been fitted yet. Call fit() first.")
+        user_indices = np.asarray(user_indices, dtype=np.int64)
+        scores = self._U[user_indices] @ self._V.T
+        assert scores.shape == (len(user_indices), self.n_items)
+        assert not np.isnan(scores).any(), "NaN detected in full-catalog scores"
+        return scores.astype(np.float32)
 
     def get_embeddings(self) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         """

@@ -68,6 +68,40 @@ class TestLightFMAdapter(unittest.TestCase):
         for item in recs[0]:
             self.assertNotIn(item, seen_set, f"Seen item {item} was returned in recommendations")
 
+    def test_negative_sampling_rejects_observed_positives(self):
+        """The sampler must recognise observed (user, item) pairs as positives."""
+        adapter = LightFMAdapter(dim=self.dim, loss="bpr", epochs=1)
+        adapter.fit(self.train_mat, seed=42)
+
+        model = adapter.model
+        users = np.array([0, 0, 1, 1], dtype=np.int64)
+        items = np.array([0, 5, 1, 4], dtype=np.int64)
+        # Items 0 and 1 are observed for users 0 and 1 respectively; 5 and 4
+        # are not observed for those users in this fixture.
+        expected = np.array([True, False, True, False])
+        np.testing.assert_array_equal(model._is_positive(users, items), expected)
+
+    def test_all_seen_user_does_not_crash(self):
+        """A user who has seen the whole catalog has no valid negative."""
+        dense_row = sp.csr_matrix(
+            (np.ones(3, dtype=np.float32), ([0, 0, 0], [0, 1, 2])),
+            shape=(1, 3),
+            dtype=np.float32,
+        )
+        adapter = LightFMAdapter(dim=4, loss="warp", epochs=2)
+        adapter.fit(dense_row, seed=1)
+        recs = adapter.recommend(np.array([0], dtype=np.int32), k=2)
+        self.assertEqual(recs.shape, (1, 2))
+        self.assertTrue(np.all(recs >= 0))
+        self.assertTrue(np.all(recs < 3))
+
+    def test_score_all_is_full_catalog(self):
+        """score_all must return real scores for every catalog item."""
+        adapter = LightFMAdapter(dim=self.dim, loss="warp", epochs=2).fit(self.train_mat, seed=7)
+        scores = adapter.score_all(np.array([0, 2], dtype=np.int32))
+        self.assertEqual(scores.shape, (2, self.n_items))
+        self.assertTrue(np.all(np.isfinite(scores)))
+
     def test_deterministic_reproducibility(self):
         """Test that identical seeds yield identical recommendation outputs."""
         adapter1 = LightFMAdapter(dim=self.dim, loss="warp", epochs=5).fit(self.train_mat, seed=123)

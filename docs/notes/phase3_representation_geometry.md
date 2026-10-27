@@ -1,15 +1,17 @@
-# 🎬 Empirical Study: Popularity Bias & Item Representation Geometry in Collaborative Filtering (MF vs. PMF vs. BPR)
+# Empirical Study: Popularity Bias & Item Representation Geometry in Collaborative Filtering (MF vs. PMF vs. BPR)
+
+> **Historical note (2026-10-27):** These Phase 3 projections were produced before the correctness audit. The current adapters use standard bias-free BPR (`use_bias=False`), and the corrected closed-loop benchmark shows BPR is popularity-dominated from $t=0$ rather than dispersing the long tail. The BPR discussion below records the pre-fix experiment; see [`correctness_fixes.md`](./correctness_fixes.md) and Phase 4 for current results.
 
 ---
 
-### 🎯 1. Project Objective & Aim
+### 1. Project Objective & Aim
 * **Analyze Item Embedding Geometry:** Examine how popularity bias and severe interaction sparsity impact the distribution and structure of learned latent vectors (embeddings) in collaborative filtering models[cite: 1].
 * **Compare Optimization Paradigms:** Investigate whether pointwise rating prediction (MF, PMF) causes tail items to collapse into uninformative representations around the origin, and whether pairwise ranking loss with negative sampling (BPR) mitigates this collapse[cite: 1].
 * **Assess Recommender Fairness & Diversity:** Provide a visual and theoretical foundation for understanding why popular blockbusters dominate recommendation lists while niche items struggle to be discovered[cite: 1].
 
 ---
 
-### 📊 2. Dataset Profiling & Tail Distribution Analysis
+### 2. Dataset Profiling & Tail Distribution Analysis
 The experiment uses the benchmark **MovieLens 1M** dataset[cite: 1]:
 * **Total Interactions:** 1,000,209 explicit ratings on a 1–5 star scale[cite: 1].
 * **User Count:** 6,040 users[cite: 1].
@@ -20,15 +22,15 @@ The catalog was segmented into three distinct popularity tiers based on interact
 
 | Tier | Definition | Movie Count | Total Ratings | Rating Share (%) |
 | :--- | :--- | :--- | :--- | :--- |
-| **Short-Tail** 🌟 | $\ge 250$ ratings | 1,216 movies[cite: 1] | 808,922[cite: 1] | **~80.88%**[cite: 1] |
-| **Mid-Tail** ⚖️ | $50 - 249$ ratings | 1,298 movies[cite: 1] | 168,917[cite: 1] | **~16.89%**[cite: 1] |
-| **Long-Tail** 📉 | $< 50$ ratings | 1,192 movies[cite: 1] | 22,370[cite: 1] | **~2.24%**[cite: 1] |
+| **Short-Tail** | $\ge 250$ ratings | 1,216 movies[cite: 1] | 808,922[cite: 1] | **~80.88%**[cite: 1] |
+| **Mid-Tail** | $50 - 249$ ratings | 1,298 movies[cite: 1] | 168,917[cite: 1] | **~16.89%**[cite: 1] |
+| **Long-Tail** | $< 50$ ratings | 1,192 movies[cite: 1] | 22,370[cite: 1] | **~2.24%**[cite: 1] |
 
 > **Key Observation:** The catalog exhibits extreme Pareto-like skew[cite: 1]. While short-tail and long-tail categories contain roughly equal numbers of items (~1,200 movies each), the short tail absorbs more than $80\%$ of all user interactions, leaving the long tail with only $2.24\%$ of feedback[cite: 1].
 
 ---
 
-### ⚙️ 3. Experimental Setup & Methodology
+### 3. Experimental Setup & Methodology
 * **Framework:** Cornac recommendation library[cite: 1].
 * **Data Splitting:** `RatioSplit` with an 80/20 train/test split, random seed = 42, and an interaction rating threshold of 1.0[cite: 1].
 * **Latent Factor Dimensionality:** $k = 32$ latent factors for all models[cite: 1].
@@ -38,7 +40,7 @@ The catalog was segmented into three distinct popularity tiers based on interact
 
 ---
 
-### 🧠 4. Architectural Breakdown of the Three Models
+### 4. Architectural Breakdown of the Three Models
 
 #### 1. Matrix Factorization (MF)
 * **Optimization Strategy:** Pointwise explicit rating regression using Stochastic Gradient Descent (SGD)[cite: 1].
@@ -61,14 +63,14 @@ The catalog was segmented into three distinct popularity tiers based on interact
 
 ---
 
-### 📐 5. Explanation of Item Factor Matrix Shape: `(3675, 32)`
+### 5. Explanation of Item Factor Matrix Shape: `(3675, 32)`
 During factor extraction, the shape of the item vector matrix was verified as `(3675, 32)` across all models[cite: 1]:
 * **Dimension 1 (3,675 Rows):** Represents the number of unique items present in the training set[cite: 1]. While the raw dataset contains 3,706 items, 31 movies only appeared in the 20% test partition (or had no active interactions retained in the training graph), leaving 3,675 learnable item vectors[cite: 1].
 * **Dimension 2 (32 Columns):** Corresponds to the latent embedding dimensionality ($k=32$) specified during model instantiation[cite: 1].
 
 ---
 
-### 🗺️ 6. Visualization Analysis & Geometric Interpretations
+### 6. Visualization Analysis & Geometric Interpretations
 
 #### Plot Configuration
 * **Short-tail (Orange `#D95F02`):** $\ge 250$ interactions[cite: 1].
@@ -85,7 +87,7 @@ During factor extraction, the shape of the item vector matrix was verified as `(
 
 ---
 
-### 💡 7. Practical Implications & Evaluation Roadmap
+### 7. Practical Implications & Evaluation Roadmap
 
 #### Trade-offs:
 * **Pointwise Models (MF/PMF):** High rating prediction accuracy for blockbuster items, but suffer from low novelty, limited catalog exploration, and severe recommendation concentration.

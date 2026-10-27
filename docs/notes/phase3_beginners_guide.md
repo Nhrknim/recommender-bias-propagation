@@ -2,9 +2,11 @@
 # A Beginner's Guide to AI Movie Recommendations & The "Popularity Trap"
 ### Understanding How Algorithms Learn Niche vs. Blockbuster Movies (MF vs. PMF vs. BPR)
 
+> **Historical note (2026-10-27):** This guide explains the original Phase 3 experiment. Its BPR projections predate the correctness audit; the current adapter uses standard bias-free BPR (`use_bias=False`), and the corrected closed-loop benchmark shows BPR is popularity-dominated from `t=0` rather than dispersing the long tail. See [`correctness_fixes.md`](./correctness_fixes.md) and Phase 4 for current results.
+
 ---
 
-## 1. The Big Picture: Why Did We Do This? 🎯
+## 1. The Big Picture: Why Did We Do This?
 
 Have you ever wondered why streaming apps like Netflix, YouTube, or Spotify always seem to recommend the same massive hits (like *Stranger Things* or *The Avengers*) over and over again, while thousands of great indie films remain hidden in the dark?[cite: 3]
 
@@ -20,21 +22,21 @@ To answer these questions, we took a real-world movie dataset, trained three dif
 
 ---
 
-## 2. The Data & The "Superstar" Problem 📊
+## 2. The Data & The "Superstar" Problem
 
 We used the famous **MovieLens 1M** dataset:[cite: 3]
-* 👥 **6,040 real users**[cite: 3]
-* 🎬 **3,706 movies**[cite: 3]
-* ⭐ **1,000,209 ratings** (on a 1 to 5 star scale)[cite: 3]
+* **6,040 real users**[cite: 3]
+* **3,706 movies**[cite: 3]
+* **1,000,209 ratings** (on a 1 to 5 star scale)[cite: 3]
 
 ### The "80/20" Rule on Steroids
 When we counted how many times each movie was rated, we found an extreme imbalance:[cite: 3]
 
 | Movie Group | Description | How Many Movies? | How Many Ratings Did They Get? | % of All Ratings |
 | :--- | :--- | :--- | :--- | :--- |
-| **Short-Tail** 🌟 *(Blockbusters)* | Highly popular ($\ge 250$ ratings) | **1,216 movies** | **808,922 ratings** | **80.9%** |
-| **Mid-Tail** ⚖️ *(Regular Movies)* | Moderately popular ($50 - 249$ ratings) | **1,298 movies** | **168,917 ratings** | **16.9%** |
-| **Long-Tail** 📉 *(Hidden Gems/Niche)* | Rarely watched ($< 50$ ratings) | **1,192 movies** | **22,370 ratings** | **2.2%** |
+| **Short-Tail** *(Blockbusters)* | Highly popular ($\ge 250$ ratings) | **1,216 movies** | **808,922 ratings** | **80.9%** |
+| **Mid-Tail** *(Regular Movies)* | Moderately popular ($50 - 249$ ratings) | **1,298 movies** | **168,917 ratings** | **16.9%** |
+| **Long-Tail** *(Hidden Gems/Niche)* | Rarely watched ($< 50$ ratings) | **1,192 movies** | **22,370 ratings** | **2.2%** |
 
 
 ```
@@ -50,11 +52,11 @@ All 1,000,000 Ratings Visualized:
 Notice something wild: **The Blockbusters and the Niche Gems have roughly the same number of movies (~1,200 each)**.[cite: 3] 
 Yet, the blockbusters hog almost **81%** of all user activity, while the bottom 1,200 movies share a tiny **2.2%**.[cite: 3]
 
-> 💡 **Analogy:** Imagine a classroom of 30 students where the teacher spends 50 minutes talking to just 3 loud kids, and only has 1 minute left for the other 27 kids.[cite: 3] The teacher will get to know those 3 kids deeply, but will know almost nothing about the rest![cite: 3]
+> **Analogy:** Imagine a classroom of 30 students where the teacher spends 50 minutes talking to just 3 loud kids, and only has 1 minute left for the other 27 kids.[cite: 3] The teacher will get to know those 3 kids deeply, but will know almost nothing about the rest![cite: 3]
 
 ---
 
-## 3. What Did We Do & How Did We Do It? 🛠️
+## 3. What Did We Do & How Did We Do It?
 
 We built a 5-step experiment:[cite: 3]
 
@@ -69,7 +71,7 @@ We built a 5-step experiment:[cite: 3]
 
 ---
 
-## 4. What on Earth is an "Embedding"? 🧠
+## 4. What on Earth is an "Embedding"?
 
 Think of an **embedding** as a movie's **taste profile** or a list of **32 hidden ingredients**.[cite: 3] 
 
@@ -87,12 +89,12 @@ To calculate how much you will like a movie, the computer multiplies your 32 num
 
 $$\text{Predicted Match Score} = (\text{Your 32 Numbers}) \times (\text{Movie's 32 Numbers})$$
 
-* If your numbers and the movie's numbers match up (both high on sci-fi, both low on romance), the score is **huge** 🚀 $\rightarrow$ *Recommended!*[cite: 3]
-* If the numbers conflict, or if the movie's numbers are all zeroes, the score is **near zero** 📉 $\rightarrow$ *Never recommended!*[cite: 3]
+* If your numbers and the movie's numbers match up (both high on sci-fi, both low on romance), the score is **huge** $\rightarrow$ *Recommended!*[cite: 3]
+* If the numbers conflict, or if the movie's numbers are all zeroes, the score is **near zero** $\rightarrow$ *Never recommended!*[cite: 3]
 
 ---
 
-## 5. Meet the 3 Models: Three Different Ways to Learn 🥊
+## 5. Meet the 3 Models: Three Different Ways to Learn
 
 Not all AI models learn the same way.[cite: 3] Here is how our three contenders work in plain English:[cite: 3]
 
@@ -124,37 +126,26 @@ Not all AI models learn the same way.[cite: 3] Here is how our three contenders 
 
 ---
 
-## 6. What Did the Maps Look Like? (The Plots & Embedding Shapes) 🗺️
+## 6. What Did the Maps Look Like? (The Plots & Embedding Shapes)
 
 When we plotted the 2D maps of all 3,675 movies, we color-coded every dot:[cite: 3]
-* 🟠 **Orange dots:** Short-tail (Blockbusters with 250+ ratings)[cite: 3]
-* 🟣 **Purple dots:** Mid-tail (Regular movies with 50-249 ratings)[cite: 3]
-* 🟢 **Green dots:** Long-tail (Niche movies with < 50 ratings)[cite: 3]
+* **Orange dots:** Short-tail (Blockbusters with 250+ ratings)[cite: 3]
+* **Purple dots:** Mid-tail (Regular movies with 50-249 ratings)[cite: 3]
+* **Green dots:** Long-tail (Niche movies with < 50 ratings)[cite: 3]
 
-Here is a visual sketch of what each model produced:[cite: 3]
-
-
-```
+Here is a visual sketch of what each model produced (O = short-tail, P = mid-tail, G = long-tail):
 
 ```
-    MF & PMF MAP                                 BPR MAP
+    MF & PMF MAP                              BPR MAP
+    (Collapsed Ball)                           (Wide Spread)
 
-```
-
-(The "Collapsed Ball" Shape)             (The "Universal Spread" Shape)
-
-```
-🟠                 🟠                     🟢      🟠         🟣
-
-```
-
-🟠   ┌─────────────┐   🟠                🟠      🟢       🟠       🟢
-│  🟢 🟢 🟢   │                            🟣         🟢
-🟠   │  🟢 🟢 🟢   │    🟠                  🟠       🟣      🟠
-│  🟢 🟢 🟢   │                     🟢      🟠         🟢    🟠
-🟠   └─────────────┘   🟠                   🟣         🟢        🟣
-🟠                                       🟠
-
+         O     O                              G     O       P
+      +---------+       O                  O     G     O     G
+      | G G G   |                          P     G
+   O  | G G G   |  O         O            O     P     O
+      | G G G   |                    G     O     G     O
+      +---------+  O                P     G     O     G
+   O                    O
 ```
 
 ### What We Saw:
@@ -167,7 +158,7 @@ Here is a visual sketch of what each model produced:[cite: 3]
 
 ---
 
-## 7. Why Did the Shapes Change? (The "Secret Sauce") 🔍
+## 7. Why Did the Shapes Change? (The "Secret Sauce")
 
 Why did MF/PMF crush niche movies into a ball, while BPR spread them out?[cite: 3]
 
@@ -176,7 +167,7 @@ Why did MF/PMF crush niche movies into a ball, while BPR spread them out?[cite: 
 * **Starvation:** A niche movie with only 3 ratings only gets pushed away from zero 3 times during the entire training process.[cite: 3]
 * **Result:** The rubber band wins![cite: 3] The movie's 32 numbers collapse to $(0.01, 0.00, -0.01 \dots)$, meaning the AI knows nothing about it.[cite: 3] On our map, all these "near-zero" movies end up in the exact same spot: a dense ball in the middle.[cite: 3]
 
-### Why BPR Spread Them Out:
+### Why the Original Phase 3 BPR Spread Them Out:
 * **BPR Learns from Unwatched Movies:** BPR constantly trains by picking a movie you watched, and comparing it against a movie you **didn't watch**.[cite: 3]
 * **The Math of Probability:** You have probably only watched 50 movies out of 3,700.[cite: 3] That means over 3,600 movies sit in your "unwatched" pile![cite: 3]
 * Even a niche movie with only 2 ratings is in the unwatched pile of thousands of users.[cite: 3] During training, it gets drawn as the "unwatched movie" hundreds of times![cite: 3]
@@ -187,7 +178,7 @@ Why did MF/PMF crush niche movies into a ball, while BPR spread them out?[cite: 
 
 ---
 
-## 8. What Does This Change Specify in the Real World? 🎬
+## 8. What Does This Change Specify in the Real World?
 
 What happens when a user opens their app under each model?[cite: 3]
 
@@ -197,13 +188,13 @@ What happens when a user opens their app under each model?[cite: 3]
 +--------------------------+--------------------------------------------------+
 | Model                    | What the User Actually Experiences               |
 +--------------------------+--------------------------------------------------+
-| Matrix Factorization     | "The Boring Echo Chamber" 😴                     |
+| Matrix Factorization     | "The Boring Echo Chamber"                     |
 | (MF / PMF)               | Because all niche movies have vectors near zero, |
 |                          | their match score is always zero. Only big       |
 |                          | blockbusters get recommended. Everyone gets the  |
 |                          | same popular movies.                             |
 +--------------------------+--------------------------------------------------+
-| Bayesian Personalized    | "The Serendipitous Explorer" 🍿                   |
+| Bayesian Personalized    | "The Serendipitous Explorer"                   |
 | Ranking (BPR)            | Because niche movies have real positions on the  |
 |                          | map, if you love 1980s Japanese anime, a rare    |
 |                          | 1980s anime movie can achieve a high match score |
@@ -218,12 +209,12 @@ Nothing in engineering is free![cite: 3] BPR assumes that if you didn't watch a 
 
 ---
 
-## 9. Key Takeaways & What's Next for This Project 🚀
+## 9. Key Takeaways & What's Next for This Project
 
 ### In Summary:
 1. **Popularity bias is a real mathematical trap:** 80% of data comes from 30% of items.[cite: 3]
 2. **Pointwise models (MF/PMF) fail niche items:** They starve them of updates, collapsing their vectors to zero.[cite: 3]
-3. **Pairwise models (BPR) rescue niche items:** By treating unwatched movies as comparisons, they actively carve out meaningful embeddings for rare titles.[cite: 3]
+3. **In the original Phase 3 setup, pairwise BPR appeared to rescue niche items:** By treating unwatched movies as comparisons, it carved out more distinct embeddings for rare titles. The corrected closed-loop benchmark supersedes this: standard bias-free BPR is popularity-dominated from `t=0`.
 
 ### Great Additions for Your Presentation or Paper:
 * **Measure Catalog Coverage:** Calculate what percentage of all 3,700 movies the system actually recommends across all users. (BPR will score much higher than MF!).[cite: 3]

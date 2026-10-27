@@ -49,6 +49,25 @@ class _NativeLightFM:
         self.item_biases: Optional[np.ndarray] = None
         self.n_users: int = 0
         self.n_items: int = 0
+        # Sorted flat keys (u * n_items + i) of observed positives, used for
+        # O(log N) vectorised rejection of invalid negatives.
+        self._positive_keys: Optional[np.ndarray] = None
+        self._seen_counts: Optional[np.ndarray] = None
+
+    def _is_positive(self, user_ids: np.ndarray, item_ids: np.ndarray) -> np.ndarray:
+        """Vectorised membership test for (user, item) positives."""
+        if self._positive_keys is None or len(self._positive_keys) == 0:
+            return np.zeros(np.broadcast(np.asarray(user_ids), np.asarray(item_ids)).shape, dtype=bool)
+        users = np.asarray(user_ids, dtype=np.int64)
+        items = np.asarray(item_ids, dtype=np.int64)
+        if users.ndim == 1 and items.ndim == 1:
+            keys = users * self.n_items + items
+        else:
+            keys = users[..., None] * self.n_items + items
+        flat = keys.ravel()
+        idx = np.searchsorted(self._positive_keys, flat)
+        idx = np.clip(idx, 0, len(self._positive_keys) - 1)
+        return (self._positive_keys[idx] == flat).reshape(keys.shape)
 
     def fit(self, interactions: sp.coo_matrix, epochs: int = 5):
         self.n_users, self.n_items = interactions.shape
@@ -70,6 +89,16 @@ class _NativeLightFM:
         n_pos = len(rows)
         if n_pos == 0:
             return self
+
+        # BPR/WARP are undefined without at least one negative candidate.
+        if self.n_items < 2:
+            return self
+
+        # Precompute positive-pair lookup keys for vectorised rejection sampling.
+        self._positive_keys = np.sort(
+            rows.astype(np.int64) * self.n_items + cols.astype(np.int64)
+        )
+        self._seen_counts = np.bincount(rows, minlength=self.n_users)
 
         lr = float(self.learning_rate)
         warp_max_rank = float(self.n_items - 1)
@@ -95,6 +124,19 @@ class _NativeLightFM:
                 if self.loss == "warp":
                     # Sample candidates in batch: shape (B, max_sampled)
                     candidates = self.rng.randint(0, self.n_items, size=(b_len, self.max_sampled))
+
+                    # Reject observed positives. WARP's assumption is that a
+                    # candidate is a true negative; without this check the model
+                    # is frequently trained to rank a user's own liked item down.
+                    max_retries = 20
+                    for _ in range(max_retries):
+                        invalid = self._is_positive(u_batch, candidates)
+                        n_invalid = int(invalid.sum())
+                        if n_invalid == 0:
+                            break
+                        candidates[invalid] = self.rng.randint(0, self.n_items, size=n_invalid)
+                    invalid = self._is_positive(u_batch, candidates)
+
                     cand_vecs = self.item_embeddings[candidates] # (B, S, d)
                     cand_b = self.item_biases[candidates]        # (B, S)
 
@@ -102,13 +144,13 @@ class _NativeLightFM:
                     cand_scores = np.sum(u_vecs[:, None, :] * cand_vecs, axis=2) + u_b[:, None] + cand_b
 
                     # Violations: 1 + neg_score - pos_score > 0
-                    violations = (1.0 + cand_scores - pos_scores[:, None]) > 0.0
+                    violations = ((1.0 + cand_scores - pos_scores[:, None]) > 0.0) & ~invalid
                     has_violation = np.any(violations, axis=1)
 
                     if not np.any(has_violation):
                         continue
 
-                    # Select rows with violations
+                    # Select rows with valid violating negatives
                     v_rows = np.where(has_violation)[0]
                     v_viol = violations[v_rows]
                     first_viol = np.argmax(v_viol, axis=1) # First violating column index
@@ -116,6 +158,10 @@ class _NativeLightFM:
                     v_u = u_batch[v_rows]
                     v_pos = pos_batch[v_rows]
                     v_neg = candidates[v_rows, first_viol]
+
+                    # TOCTOU guard: the chosen candidate must not be positive.
+                    assert not self._is_positive(v_u, v_neg[:, None]).any(), \
+                        "WARP selected a positive item as a negative"
 
                     v_attempts = first_viol + 1.0
                     rank_multiplier = np.log1p(warp_max_rank / v_attempts)[:, None] # (V, 1)
@@ -143,29 +189,55 @@ class _NativeLightFM:
 
                 else: # BPR
                     neg_items = self.rng.randint(0, self.n_items, size=b_len)
-                    neg_vecs = self.item_embeddings[neg_items]
-                    neg_b = self.item_biases[neg_items]
 
-                    neg_scores = np.sum(u_vecs * neg_vecs, axis=1) + u_b + neg_b
-                    diff = pos_scores - neg_scores
+                    # Reject observed positives; skip rows with no valid negative.
+                    max_retries = 20
+                    for _ in range(max_retries):
+                        invalid = self._is_positive(u_batch, neg_items)
+                        n_invalid = int(invalid.sum())
+                        if n_invalid == 0:
+                            break
+                        neg_items[invalid] = self.rng.randint(0, self.n_items, size=n_invalid)
+                    invalid = self._is_positive(u_batch, neg_items)
+                    valid_rows = ~invalid
+                    if not np.any(valid_rows):
+                        continue
+
+                    b_u = u_batch[valid_rows]
+                    b_pos = pos_batch[valid_rows]
+                    b_neg = neg_items[valid_rows]
+                    b_u_vecs = u_vecs[valid_rows]
+                    b_pos_vecs = pos_vecs[valid_rows]
+                    b_u_b = u_b[valid_rows]
+                    b_pos_b = pos_b[valid_rows]
+                    b_pos_scores = pos_scores[valid_rows]
+
+                    b_neg_vecs = self.item_embeddings[b_neg]
+                    b_neg_b = self.item_biases[b_neg]
+
+                    b_neg_scores = np.sum(b_u_vecs * b_neg_vecs, axis=1) + b_u_b + b_neg_b
+                    diff = b_pos_scores - b_neg_scores
                     sig = 1.0 / (1.0 + np.exp(np.clip(-diff, -15.0, 15.0)))
                     coeff = (1.0 - sig)[:, None] # (B, 1)
 
-                    u_step = lr * (coeff * (pos_vecs - neg_vecs) - self.user_alpha * u_vecs)
-                    pos_step = lr * (coeff * u_vecs - self.item_alpha * pos_vecs)
-                    neg_step = lr * (-coeff * u_vecs - self.item_alpha * neg_vecs)
+                    u_step = lr * (coeff * (b_pos_vecs - b_neg_vecs) - self.user_alpha * b_u_vecs)
+                    pos_step = lr * (coeff * b_u_vecs - self.item_alpha * b_pos_vecs)
+                    neg_step = lr * (-coeff * b_u_vecs - self.item_alpha * b_neg_vecs)
 
                     u_step = np.clip(u_step, -1.0, 1.0)
                     pos_step = np.clip(pos_step, -1.0, 1.0)
                     neg_step = np.clip(neg_step, -1.0, 1.0)
 
-                    np.add.at(self.user_embeddings, u_batch, u_step)
-                    np.add.at(self.item_embeddings, pos_batch, pos_step)
-                    np.add.at(self.item_embeddings, neg_items, neg_step)
+                    assert not self._is_positive(b_u, b_neg[:, None]).any(), \
+                        "BPR selected a positive item as a negative"
+
+                    np.add.at(self.user_embeddings, b_u, u_step)
+                    np.add.at(self.item_embeddings, b_pos, pos_step)
+                    np.add.at(self.item_embeddings, b_neg, neg_step)
 
                     b_step = np.clip((lr * coeff.flatten()).astype(np.float32), -0.5, 0.5)
-                    np.add.at(self.item_biases, pos_batch, b_step)
-                    np.add.at(self.item_biases, neg_items, -b_step)
+                    np.add.at(self.item_biases, b_pos, b_step)
+                    np.add.at(self.item_biases, b_neg, -b_step)
 
             # Prevent runaway norms across epochs
             np.clip(self.user_embeddings, -10.0, 10.0, out=self.user_embeddings)
@@ -315,13 +387,8 @@ class LightFMAdapter(BaseRecommenderAdapter):
         if n_active == 0:
             return np.zeros((0, k), dtype=np.int32)
 
-        user_biases, user_factors = self.model.get_user_representations()
-        item_biases, item_factors = self.model.get_item_representations()
-
-        # Vectorized batch score computation:
-        # score(u, i) = (u_factor . i_factor) + item_bias + user_bias
-        active_user_factors = user_factors[user_indices]
-        scores = (active_user_factors @ item_factors.T) + item_biases[None, :] + user_biases[user_indices, None]
+        # Full-catalog scores: score(u, i) = (u_factor . i_factor) + b_u + b_i
+        scores = self.score_all(user_indices)
 
         # Mask seen items from training matrix
         if remove_seen:
@@ -346,6 +413,22 @@ class LightFMAdapter(BaseRecommenderAdapter):
 
         assert top_k.shape == (n_active, k), f"Shape misaligned: {top_k.shape} vs ({n_active}, {k})"
         return top_k.astype(np.int32)
+
+    def score_all(self, user_indices: np.ndarray) -> np.ndarray:
+        """Return real full-catalog scores of shape (len(user_indices), |I|)."""
+        if self.model is None:
+            raise RuntimeError("Adapter model has not been fitted yet. Call fit() first.")
+        user_indices = np.asarray(user_indices, dtype=np.int64)
+        user_biases, user_factors = self.model.get_user_representations()
+        item_biases, item_factors = self.model.get_item_representations()
+        scores = (
+            user_factors[user_indices] @ item_factors.T
+            + item_biases[None, :]
+            + user_biases[user_indices, None]
+        )
+        assert scores.shape == (len(user_indices), self.n_items)
+        assert not np.isnan(scores).any(), "NaN detected in full-catalog scores"
+        return scores.astype(np.float32)
 
     def get_embeddings(self) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         """

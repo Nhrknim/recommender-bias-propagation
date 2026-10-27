@@ -18,8 +18,8 @@ This specification establishes the canonical software and mathematical architect
 │                    CLOSED-LOOP SIMULATION ARCHITECTURE                      │
 │                                                                             │
 │  ┌───────────────────────────┐         ┌─────────────────────────────────┐  │
-│  │ Accumulating Train Matrix │         │    Frozen Ground-Truth Anchor    │  │
-│  │   D_t ∈ {0, 1}^(|U| x |I|)│         │         (U*, V*) at t=0         │  │
+│  │ Accumulating Train Matrix │         │  Shared Frozen Click Anchor      │  │
+│  │   D_t ∈ {0, 1}^(|U| x |I|)│         │   (U*, V*) = TruncatedSVD(D_0)   │  │
 │  └─────────────┬─────────────┘         └────────────────┬────────────────┘  │
 │                │                                        │                   │
 │                ▼                                        ▼                   │
@@ -73,10 +73,17 @@ def merge_and_deduplicate(D_t: sp.csr_matrix, clicks_coo: Tuple[np.ndarray, np.n
     return D_next
 ```
 
-* **Frozen Ground-Truth Anchor ($U^* \in \mathbb{R}^{|\mathcal{U}| \times d}, V^* \in \mathbb{R}^{|\mathcal{I}| \times d}$):** Read-only user and item factor matrices learned at $t=0$, serving as uncorrupted preference benchmarks.
+* **Shared Frozen Click Anchor ($U^* \in \mathbb{R}^{|\mathcal{U}| \times d}, V^* \in \mathbb{R}^{|\mathcal{I}| \times d}$):** Read-only user and item factor matrices estimated **once** from the baseline matrix $\mathcal{D}_0$ by truncated SVD (with per-component sign canonicalisation). The anchor is model-independent: every adapter and seed in a run shares exactly the same $U^*, V^*$, so click traces are not generated from the geometry of the model under evaluation. Geometry metrics use a separate baseline: each model's own $t=0$ item factors.
 
 ### 2.3 Catalog Popularity Register
 * Dense 1D array $f_i^{(t)} = \sum_{u=0}^{|\mathcal{U}|-1} \mathcal{D}_t[u, i]$ tracking total cumulative interactions per item.
+
+### 2.4 Shared Click Anchor Construction
+The click anchor is computed once per run from the baseline matrix:
+
+$$\mathcal{D}_0 \approx U \Sigma V^\top, \qquad U^* = U \Sigma^{1/2}, \quad V^* = V \Sigma^{1/2},$$
+
+using a deterministic truncated SVD with $d = 32$ components (or $\min(32, |\mathcal{U}|, |\mathcal{I}|)$). Per-component signs are canonicalised so the largest-magnitude entry of each right singular vector is positive. The anchor is passed read-only to every worker process; it never depends on the adapter class, seed, or generation index. This prevents the self-confirming loop in which a model's own embeddings define the preferences used to evaluate it.
 
 ---
 
@@ -98,7 +105,19 @@ class BaseRecommenderAdapter(ABC):
 
     @abstractmethod
     def recommend(self, user_indices: np.ndarray, k: int = 10, remove_seen: bool = True) -> np.ndarray:
-        """Generates top-K recommendation lists of shape (|users|, K)."""
+        """Generates top-K recommendation lists of shape (|users|, K).
+
+        Unused slots when K > |I| are padded with the sentinel -1.
+        """
+        pass
+
+    @abstractmethod
+    def score_all(self, user_indices: np.ndarray) -> np.ndarray:
+        """Returns real full-catalog scores of shape (|users|, |I|).
+
+        This is the canonical input for tie-aware AUC; it must not return a
+        truncated top-K matrix.
+        """
         pass
 
     @abstractmethod
@@ -144,52 +163,46 @@ def extract_aligned_embeddings(model_cornac, n_users: int, n_items: int, dim: in
 
 ```python
 def simulate_user_clicks(
-    recs: np.ndarray, 
-    U_star: np.ndarray, 
-    V_star: np.ndarray, 
-    pop_counts: np.ndarray, 
-    alpha: float = 0.5, 
-    tau: float = 1.0, 
+    recs: np.ndarray,          # (N_active, K), -1 marks padding
+    U_star: np.ndarray,        # shared anchor, (|U|, d)
+    V_star: np.ndarray,        # shared anchor, (|I|, d)
+    pop_counts: np.ndarray,    # (|I|,)
+    user_indices: np.ndarray,  # GLOBAL user ids aligned to recs rows
+    alpha: float = 0.5,
+    tau: float = 1.0,
     seed: int = 42
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Simulates user browsing, position decay, relevance matching, and session budgeting."""
-    np.random.seed(seed)
+    """Simulates browsing, position decay, relevance, conformity, and session budgets."""
+    rng = np.random.default_rng(seed)
     n_active, k = recs.shape
     d = U_star.shape[1]
-    
+
     # 1. Position Discount
-    ranks = np.arange(k)
-    p_exposed = 1.0 / np.log2(ranks + 2.0)
-    
-    # 2. Relevance & Conformity Calculation
-    u_vecs = U_star[np.repeat(np.arange(n_active), k)]
-    i_vecs = V_star[recs.flatten()]
-    dot_products = np.sum(u_vecs * i_vecs, axis=1).reshape(n_active, k)
-    
-    logits = np.clip(dot_products / (tau * np.sqrt(d)), -15.0, 15.0)
-    p_relevance = 1.0 / (1.0 + np.exp(-logits))
-    
-    max_pop = np.max(pop_counts)
-    p_conformity = np.log1p(pop_counts[recs]) / np.log1p(max_pop)
-    
-    # 3. Joint Click Probability
+    p_exposed = compute_position_exposure(k)
+
+    # 2. Relevance & Conformity (user_indices selects the correct global row)
+    p_relevance = compute_intrinsic_preference(U_star, V_star, recs, user_indices, tau=tau)
+    p_conformity = compute_social_conformity(pop_counts, recs)
+
+    # 3. Joint Click Probability, with -1 padding forced to zero
     p_click = p_exposed * ((1.0 - alpha) * p_relevance + alpha * p_conformity)
-    
+    p_click[recs < 0] = 0.0
+
     # 4. Bernoulli Sampling & Poisson Session Budgeting (λ = 3)
-    rand_vals = np.random.uniform(size=(n_active, k))
-    clicked_mask = rand_vals < p_click
-    budgets = np.random.poisson(lam=3.0, size=n_active)
-    
+    clicked_mask = (rng.random((n_active, k)) < p_click) & (recs >= 0)
+    budgets = rng.poisson(lam=3.0, size=n_active)
+
     clicked_u, clicked_i = [], []
-    for u_idx in range(n_active):
-        items_clicked = recs[u_idx, clicked_mask[u_idx]]
-        if len(items_clicked) > budgets[u_idx]:
-            items_clicked = items_clicked[:budgets[u_idx]]
-        clicked_u.extend([u_idx] * len(items_clicked))
+    for row in range(n_active):
+        items_clicked = recs[row, clicked_mask[row]]
+        items_clicked = items_clicked[: budgets[row]]
+        clicked_u.extend([int(user_indices[row])] * len(items_clicked))
         clicked_i.extend(items_clicked)
-        
-    return np.array(clicked_u, dtype=np.int32), np.array(clicked_i, dtype=np.int32)
+
+    return np.asarray(clicked_u, dtype=np.int32), np.asarray(clicked_i, dtype=np.int32)
 ```
+
+**Coordinate contract:** rows of `recs` correspond to `user_indices`, which are **global** zero-indexed user IDs. The returned click arrays emit those same global IDs, so `merge_and_deduplicate` can add them directly to $\mathcal{D}_{t+1}$ without local-row remapping.
 
 ---
 
@@ -199,40 +212,50 @@ def simulate_user_clicks(
 * **Exposure Gini ($G^{(t)}$):**
   $$G^{(t)} = \frac{|\mathcal{I}| + 1}{|\mathcal{I}|} - \frac{2 \sum_{k=1}^{|\mathcal{I}|} (|\mathcal{I}| - k + 1) c_{(k)}^{(t)}}{|\mathcal{I}| \sum_{i=1}^{|\mathcal{I}|} c_i^{(t)}}$$
 * **Catalog Coverage@K:** $\text{Cov}@K = \frac{\left| \bigcup_{u \in \mathcal{U}} \text{TopK}^{(t)}(u) \right|}{|\mathcal{I}|}$.
-* **Average Percentage of Long-Tail@K:** $\text{APLT}@K = \frac{1}{|\mathcal{U}|} \sum_{u} \frac{|\text{TopK}^{(t)}(u) \cap \mathcal{I}_{\text{Long-Tail}}|}{K}$.
+* **Average Percentage of Long-Tail@K:** $\text{APLT}@K = \frac{1}{|\mathcal{U}|} \sum_{u} \frac{|\text{TopK}^{(t)}(u) \cap \mathcal{I}_{\text{Long-Tail}}|}{\text{valid slots}(u)}$, where padding sentinels are excluded from both numerator and denominator.
 
 ### 5.2 Tier 2: User-Subgroup Mesoscale Dynamics
 * **User Cohort Partitioning:** Users sorted by baseline long-tail interaction ratio $\gamma_u$ and split into three equal groups ($\mathcal{U}_{\text{Pop}}, \mathcal{U}_{\text{Div}}, \mathcal{U}_{\text{Niche}}$).
-* **Category Calibration Drift ($D_{\text{KL}}$):**
-  $$D_{\text{KL}}\left(P_u^{(0)} \parallel Q_u^{(t)}\right) = \sum_{c \in \mathcal{C}} \tilde{P}_u^{(0)}(c) \log \left( \frac{\tilde{P}_u^{(0)}(c)}{\tilde{Q}_u^{(t)}(c)} \right)$$
+* **Category Calibration Drift ($D_{\text{KL}}$):** Two distinct quantities are recorded:
+  * `kl_drift` — **realized click-category drift**: divergence between the baseline user category distribution $P_u^{(0)}$ and the category mix of the user's actual clicks in generation $t$;
+  * `rec_kl` — **recommendation-category drift**: divergence between $P_u^{(0)}$ and the category mix of the recommended slate.
+  $D_{\text{KL}}\left(P_u^{(0)} \parallel Q_u^{(t)}\right) = \sum_{c \in \mathcal{C}} \tilde{P}_u^{(0)}(c) \log \left( \frac{\tilde{P}_u^{(0)}(c)}{\tilde{Q}_u^{(t)}(c)} \right)$
 * **Subgroup Utility Gap:** $\Delta \text{NDCG}@K = \text{NDCG}@K(\mathcal{U}_{\text{Pop}}) - \text{NDCG}@K(\mathcal{U}_{\text{Niche}})$.
 
 ### 5.3 Tier 3: Ranking & Global Catalog Utility
 * **Retrieval Metrics:** Precision@K, Recall@K, NDCG@K evaluated against test set.
-* **Vectorized Mann-Whitney Global Pairwise AUC:**
+* **Vectorized Mann-Whitney Global Pairwise AUC:** evaluated on **real full-catalog scores** (`score_all`), not the top-K matrix. Ties receive average ranks, so an all-tied score vector yields $0.5$. Items in the accumulating training matrix $\mathcal{D}_t$ are excluded from the negative pool; a test positive is never excluded.
 
 ```python
-def compute_vectorized_auc(score_matrix: np.ndarray, test_matrix: sp.csr_matrix) -> float:
-    """Computes exact global pairwise AUC in O(|I| log |I|) time via rank sorting."""
+def compute_vectorized_auc(score_matrix, test_matrix, exclude_matrix=None) -> float:
+    """Tie-aware global pairwise AUC over real full-catalog scores."""
+    from scipy.stats import rankdata
+
     n_users, n_items = score_matrix.shape
     auc_scores = []
-    
     for u in range(n_users):
         pos_items = test_matrix[u].indices
-        n_pos = len(pos_items)
-        if n_pos == 0 or n_pos == n_items:
+        if len(pos_items) == 0 or len(pos_items) == n_items:
             continue
-            
-        n_neg = n_items - n_pos
-        scores = score_matrix[u]
-        
-        ranks = np.argsort(np.argsort(scores)) + 1
-        pos_rank_sum = np.sum(ranks[pos_items])
-        
-        auc_u = (pos_rank_sum - (n_pos * (n_pos + 1)) / 2.0) / (n_pos * n_neg)
-        auc_scores.append(auc_u)
-        
-    return float(np.mean(auc_scores))
+
+        scores = np.asarray(score_matrix[u]).ravel()
+        keep = np.ones(n_items, dtype=bool)
+        if exclude_matrix is not None:
+            keep[exclude_matrix[u].indices] = False
+            keep[pos_items] = True  # never drop a test positive
+        candidate_scores = scores[keep]
+        pos_mask = np.isin(np.flatnonzero(keep), pos_items)
+
+        n_pos = int(pos_mask.sum())
+        n_neg = len(candidate_scores) - n_pos
+        if n_pos == 0 or n_neg <= 0:
+            continue
+
+        ranks = rankdata(candidate_scores, method="average")
+        rank_sum = float(np.sum(ranks[pos_mask]))
+        auc_scores.append((rank_sum - n_pos * (n_pos + 1.0) / 2.0) / (n_pos * n_neg))
+
+    return float(np.mean(auc_scores)) if auc_scores else 0.5
 ```
 
 ### 5.4 Tier 4: Latent Space Geometry & Magnitude Dynamics
@@ -255,6 +278,7 @@ def compute_reflection_corrected_procrustes(V_0: np.ndarray, V_t: np.ndarray) ->
 #### Magnitude & Geometric Formulas
 * **Smooth Relative $L_2$ Vector Norm Shift ($R_{\text{norm}}$):**
   $$R_{\text{norm}}(i, t) = \frac{\|v_i^{(t)}\|_2 + \epsilon}{\|v_i^{(0)}\|_2 + \epsilon}, \quad \epsilon = 10^{-9}$$
+  *Zero-norm guard:* when $\|v_i^{(0)}\|_2 = 0$ the ratio is undefined. Such entries are returned as `NaN` and excluded from aggregate statistics; trajectories report the **median** over finite entries alongside the valid fraction, rather than letting a single cold item dominate the mean.
 * **Decomposed Magnitude vs. Angular Drift:**
   $$\|v_i^{(0)} - v_i^{(t, \text{aligned})}\|_2^2 = \underbrace{\left( \|v_i^{(0)}\|_2 - \|v_i^{(t)}\|_2 \right)^2}_{\Delta_{\text{mag}}(i, t)} + \underbrace{2 \|v_i^{(0)}\|_2 \|v_i^{(t)}\|_2 \left( 1 - \cos \theta_i \right)}_{\Delta_{\text{ang}}(i, t)}$$
 * **Embedding Drift Velocity ($v_{\text{drift}}$):** Average angular shift $1 - \cos\theta_i$ per item cohort.
@@ -282,26 +306,34 @@ def set_deterministic_seed(seed: int):
     except ImportError:
         pass
 
-def run_simulation_pipeline(adapter_cls, base_csr, seeds=[42, 123, 456, 789, 2024], T=5):
+def run_simulation_pipeline(adapter_cls, base_csr, test_csr, seeds=[42, 123, 456], T=5):
     """Executes multi-seed simulation lifecycle across T generations."""
+    # One shared, model-independent anchor for every seed/adapter.
+    U_star, V_star = build_shared_anchor(base_csr, dim=32, seed=42)
+
     for seed in seeds:
         set_deterministic_seed(seed)
         D_t = base_csr.copy()
-        
+        active_users = np.arange(D_t.shape[0], dtype=np.int32)
+
         model = adapter_cls().fit(D_t, seed=seed)
-        U_0, V_0 = model.get_embeddings()
-        
+        _, V_model_0 = model.get_embeddings()
+
         for t in range(T):
-            recs = model.recommend(np.arange(D_t.shape[0]), k=10)
-            u_clicks, i_clicks = simulate_user_clicks(recs, U_0, V_0, np.array(D_t.sum(axis=0)).flatten(), seed=seed+t)
-            
+            recs = model.recommend(active_users, k=10, remove_seen=True)
+            u_clicks, i_clicks = simulate_user_clicks(
+                recs, U_star, V_star, np.asarray(D_t.sum(axis=0)).flatten(),
+                user_indices=active_users, alpha=0.8, seed=seed + t,
+            )
+            audit_generation_metrics(D_t, recs, U_star, V_star, V_model_0, model, generation=t)
+
             D_t = merge_and_deduplicate(D_t, (u_clicks, i_clicks))
-            model = adapter_cls().fit(D_t, seed=seed + t + 1)
-            U_t, V_t = model.get_embeddings()
-            
-            audit_generation_metrics(D_t, recs, U_0, V_0, U_t, V_t, generation=t, seed=seed)
-            
-        del model, D_t, U_0, V_0, U_t, V_t
+
+            # Cold retrain only if another generation will be evaluated.
+            if t < T - 1:
+                model = adapter_cls().fit(D_t, seed=seed + t + 1)
+
+        del model, D_t, U_star, V_star
         import gc; gc.collect()
 ```
 

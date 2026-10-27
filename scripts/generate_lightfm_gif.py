@@ -14,8 +14,10 @@ sys.path.insert(0, ".")
 from src.data.dataset import load_movielens_1m
 from src.adapters.lightfm_adapter import LightFMAdapter
 from src.data.buffer import merge_and_deduplicate
+from src.engine.anchor import build_shared_anchor
 from src.engine.simulator import simulate_user_clicks
 from src.metrics.geometry import compute_reflection_corrected_procrustes
+from scripts.plot_results import find_lightfm_benchmark_json
 
 
 def main():
@@ -23,7 +25,7 @@ def main():
     print("  GENERATING LIGHTFM (WARP) EMBEDDING DRIFT TRAJECTORY ANIMATION (GIF)")
     print("=" * 80)
 
-    output_dir = "docs/images/lightfm"
+    output_dir = "docs/images/phase_6_lightfm"
     os.makedirs(output_dir, exist_ok=True)
     gif_path = os.path.join(output_dir, "embedding_drift_trajectory.gif")
 
@@ -36,15 +38,20 @@ def main():
     log_pop = np.log1p(base_pop)
     top30_items = np.argsort(-base_pop)[:30]
 
-    # Load pre-computed metrics from benchmark run for the live dashboards
-    json_path = "docs/benchmarks/lightfm_run_20261024_210634_775a03.json"
+    # Load pre-computed metrics from the latest Phase 6 benchmark run.
+    json_path = find_lightfm_benchmark_json()
     with open(json_path, "r", encoding="utf-8") as f:
         bench_data = json.load(f)
 
-    warp_metrics = bench_data["summary"]["LightFM (WARP)"]
+    summary = bench_data.get("summary") or bench_data.get("results")
+    warp_metrics = summary["LightFM (WARP)"]
     gini_curve = warp_metrics["gini"]["mean"]
     seff_curve = warp_metrics["s_eff"]["mean"]
     T = len(gini_curve)
+    print(f"  Benchmark JSON: {json_path} (T={T})")
+
+    # Shared, model-independent click anchor (frozen across all generations).
+    U_anchor, V_anchor = build_shared_anchor(train_mat, dim=32, seed=42)
 
     # 2. Run simulation and record aligned item embedding trajectories
     print(f"\n[Phase 2] Simulating {T} generations of closed-loop LightFM (WARP)...")
@@ -56,7 +63,7 @@ def main():
     # Initial baseline fit t=0
     adapter = LightFMAdapter(dim=32, loss="warp", epochs=5, learning_rate=0.005)
     adapter.fit(D_t, seed=42)
-    U_star, V_star = adapter.get_embeddings()
+    _, V_star = adapter.get_embeddings()
     item_embeddings_history.append(V_star.copy())
 
     for t in range(1, T):
@@ -65,9 +72,10 @@ def main():
         pop_counts = np.asarray(D_t.sum(axis=0)).flatten()
         u_clicks, i_clicks = simulate_user_clicks(
             recs=recs,
-            U_star=U_star,
-            V_star=V_star,
+            U_star=U_anchor,
+            V_star=V_anchor,
             pop_counts=pop_counts,
+            user_indices=active_users,
             alpha=0.8,
             tau=1.0,
             seed=42 + t

@@ -1,28 +1,30 @@
 # Phase 6 Research Notes: LightFM — Pairwise Ranking & WARP Loss Dynamics
 
 **Notebook Reference**: [`notebooks/phase_6_lightfm.ipynb`](../../notebooks/phase_6_lightfm.ipynb)  
-**Visual Assets Folder**: [`docs/images/lightfm/`](../images/lightfm/)  
+**Visual Assets Folder**: [`docs/images/phase_6_lightfm/`](../images/phase_6_lightfm/)  
 **Benchmark Suite Report**: [`docs/benchmarks/lightfm_benchmark_results.md`](../benchmarks/lightfm_benchmark_results.md)  
-**Raw 10-Gen Trajectory Log**: [`docs/benchmarks/lightfm_run_20261024_210634_775a03.json`](../benchmarks/lightfm_run_20261024_210634_775a03.json)  
+**Raw 50-Gen Trajectory Log**: [`docs/benchmarks/lightfm_run_20261027_160811_c80465.json`](../benchmarks/lightfm_run_20261027_160811_c80465.json)  
 **32-D Quantitative Drift Metrics**: [`docs/benchmarks/lightfm_quantitative_drift_metrics.json`](../benchmarks/lightfm_quantitative_drift_metrics.json)
+
+> **Backend note:** Phase 6 is a supplementary run executed with the repository's native NumPy fallback (`_NativeLightFM`) because the compiled LightFM C library is unavailable in this environment. Cross-library comparisons with the five-model core benchmark are indicative only.
 
 ---
 
 ## Executive Summary: How Can Pairwise Optimization Resist Runaway Bias?
 
-Throughout Phases 1 to 5, we observed that closed-loop recommendation feedback invariably acts as a popularity amplifier. In Pointwise Matrix Factorization (MF), long-tail items suffer from gradient starvation and collapse to the origin ($\|v_i\|_2 \to 0$). In LightGCN (Phase 5), multi-hop graph convolution acts as an acoustic amplifier for high-degree nodes, destroying over $52.4\%$ of latent manifold effective rank and collapsing the model toward non-parametric popularity.
+Throughout Phases 1 to 5, we observed that closed-loop recommendation feedback invariably acts as a popularity amplifier. In Pointwise Matrix Factorization (MF), item vectors contract radially toward the origin (median $R_{\text{norm}} = 0.704$ by $t=49$). In LightGCN (Phase 5), multi-hop graph convolution acts as an acoustic amplifier for high-degree nodes, destroying $53.0\%$ of latent manifold effective rank and collapsing the model toward non-parametric popularity.
 
-**Phase 6** introduces **LightFM** (Kula, 2015) into our longitudinal closed-loop simulator. We investigate whether optimizing directly for the top of the recommendation list using **Weighted Approximate-Rank Pairwise (WARP)** loss provides an algorithmic shield against catastrophic feedback degradation.
+**Phase 6** introduces **LightFM** (Kula, 2015) into our longitudinal closed-loop simulator. We investigate whether optimizing directly for the top of the recommendation list using **Weighted Approximate-Rank Pairwise (WARP)** loss provides partial protection against feedback degradation.
 
 > [!IMPORTANT]
-> ### Plain-English Intuition: The Two Brakes That Prevented Collapse
-> In other models (like BPR or LightGCN), every single user click acts like gravity, forcefully dragging blockbuster movies toward the exact same central point until they mash into one tight ball.
+> ### Plain-English Intuition: The Two Brakes That Limited Structural Collapse
+> In other models, the dynamics are less forgiving. In LightGCN, every click acts like gravity, dragging blockbuster movies into a single dense central attractor. In standard BPR, the ranking space is already popularity-dominated at $t=0$ and vectors lengthen over the loop, leaving the long tail in a low-norm band.
 >
-> **LightFM avoided this because of two built-in brakes:**
+> **LightFM limited this because of two built-in brakes:**
 > 1. **The Popularity Tag (Scalar Biases):** LightFM gives each movie a separate scalar bias that absorbs raw view counts. As a result, a movie's actual 32-dimensional taste profile doesn't need to change just because it becomes popular.
 > 2. **The Automatic Shut-Off Switch:** LightFM's WARP training uses adaptive rejection sampling. Once a hit movie is safely ranked near the top (#1 or #2), the algorithm considers the job done and stops pushing it around.
 >
-> Because gradient updates shut off early, popular movies gently settled into their own genre neighborhoods instead of collapsing into a single dense cluster.
+> Because gradient updates shut off early, popular movies settled into looser neighborhoods instead of collapsing into a single dense cluster. The brakes are real but **partial**: over 50 generations WARP still loses $61.4\%$ of its baseline NDCG@10 and $4.9\%$ of its effective rank. It slows the collapse rather than preventing it.
 
 ---
 
@@ -71,7 +73,7 @@ All benchmarks and longitudinal trajectories are generated from **100% measured 
 | **Loss Backbones** | **WARP vs. BPR** | Pairwise top-of-list rank weighting vs. uniform pairwise ranking |
 | **Optimizer / Epochs** | Adagrad / 5 epochs per round | Learning rate $\eta = 0.005$, L2 penalty $\alpha = 10^{-6}$ |
 | **Max Negative Candidates**| 10 | Rejection sampling limit for WARP rank estimation |
-| **Feedback Generations ($T$)**| $T = 10$ ($t = 0 \dots 9$) | Longitudinal closed feedback iterations |
+| **Feedback Generations ($T$)**| $T = 50$ ($t = 0 \dots 49$) | Longitudinal closed feedback iterations |
 | **Social Conformity ($\alpha$)**| 0.8 | Heavy social conformity weighting in click simulation |
 | **Recommendation Size ($K$)** | 10 | Top-10 recommendations per active session |
 | **Random Seeds** | `[42, 123, 456]` | Multi-seed deterministic execution ($\mu \pm 1\sigma$) |
@@ -80,33 +82,34 @@ All benchmarks and longitudinal trajectories are generated from **100% measured 
 
 ## Model Architecture & Clustering Comparison
 
-| Architecture | Loss Function | Popularity Absorption | Top-30 Blockbuster Clustering | Effective Rank Retention ($S_{\text{eff}}$ at $t=9$) | Accuracy ($NDCG@10$ at $t=9$) |
+| Architecture | Loss Function | Popularity Absorption | Top-30 Blockbuster Clustering | Effective Rank Retention ($S_{\text{eff}}$ at $t=49$) | Accuracy ($NDCG@10$ at $t=49$) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Matrix Factorization (MF)** | Pointwise MSE | Latent vector components only | Inward radial drift; long-tail origin collapse ($\|v\| \to 0$) | $31.95$ (High dispersion) | $0.0526$ |
-| **Bayesian Personalized Ranking (BPR)** | Pairwise Logistic | Latent vector components only | Uniform negative sampling pushes tail to high-norm periphery | $31.78$ (Sphere dispersion) | $0.0518$ |
-| **LightGCN (Graph CF)** | Pairwise BPR | 3-hop bipartite graph convolution | **Singular dense attractor**: 52.4% rank destruction; behaves like `MostPop` | **$13.69$ (Catastrophic collapse)** | $0.0510$ |
-| **LightFM (WARP)** | **Harmonic Rank Pairwise** | **Scalar bias ($b_i$) + rank-gated vectors** | **Loose, genre-preserving cluster**: gradient shut-off switch halts runaway drift | **$29.49$ (Graceful 0.73% contraction)** | **$0.0672$ (+29.7% vs. BPR)** |
+| **Matrix Factorization (MF)** | Pointwise MSE | Latent vector components only | Inward radial contraction (median $R_{\text{norm}} = 0.704$) | $31.96$ (High dispersion) | $0.0031$ |
+| **Bayesian Personalized Ranking (BPR)** | Pairwise Logistic | Latent vector components only | Popularity-dominated from $t=0$; radial norm growth (median $R_{\text{norm}} = 1.400$) | $2.76$ (Contraction from $3.98$) | $0.0300$ |
+| **LightGCN (Graph CF)** | Pairwise BPR | 3-hop bipartite graph convolution | **Singular dense attractor**: 53.0% rank destruction; behaves like `MostPop` | **$8.45$ (Catastrophic collapse)** | $0.0288$ |
+| **LightFM (WARP)** | **Harmonic Rank Pairwise** | **Scalar bias ($b_i$) + rank-gated vectors** | **Slower contraction**: rank-gated updates limit spectral loss to 4.9% | **$28.49$ (Graceful 4.90% contraction)** | **$0.0367$ (+21.9% vs. LightFM BPR $0.0301$)** |
+| **LightFM (BPR)** | Pairwise Logistic | Scalar bias ($b_i$) only | Dense popularity cluster | $31.96$ (Flat) | $0.0301$ |
 
 ---
 
-## Measured Benchmark Findings (Tiers 1 to 4 Across 10 Generations)
+## Measured Benchmark Findings (Tiers 1 to 4 Across 50 Generations)
 
 ### Visual 1: 4-Tier Benchmark Trajectory Dashboard
-🔗 **Direct Asset Link**: [lightfm/benchmark_trajectories.png](../images/lightfm/benchmark_trajectories.png)
+**Direct Asset Link**: [phase_6_lightfm/benchmark_trajectories.png](../images/phase_6_lightfm/benchmark_trajectories.png)
 
-![LightFM 4-Tier Benchmark Trajectories](../images/lightfm/benchmark_trajectories.png)
+![LightFM 4-Tier Benchmark Trajectories](../images/phase_6_lightfm/benchmark_trajectories.png)
 
-*Figure 1: Longitudinal 4-tier diagnostic trajectory comparison of LightFM (WARP) [Blue] versus LightFM (BPR) [Orange] across 10 closed-loop feedback generations with $\pm 1\sigma$ standard error bands.*
+*Figure 1: Longitudinal 4-tier diagnostic trajectory comparison of LightFM (WARP) [Blue] versus LightFM (BPR) [Orange] across 50 closed-loop feedback generations with $\pm 1\sigma$ standard error bands.*
 
 ### Measured Empirical Trajectory Data
 
-| Metric / Diagnostic Tier | Baseline ($t=0$) | LightFM (WARP) at $t=9$ | LightFM (BPR) at $t=9$ | Empirical Difference |
+| Metric / Diagnostic Tier | Baseline ($t=0$) | LightFM (WARP) at $t=49$ | LightFM (BPR) at $t=49$ | Empirical Difference |
 | :--- | :---: | :---: | :---: | :--- |
-| **Tier 1: Catalog Exposure Gini ($G$)** | $0.9396$ / $0.9946$ | **$0.9212$** | **$0.9897$** | **WARP reduces catalog inequality by $-6.9\%$** |
-| **Tier 2: User Genre Drift ($D_{\text{KL}}$)** | $2.7420$ / $3.9475$ | **$2.8410$** | **$2.8909$** | **WARP preserves authentic genre preferences** |
-| **Tier 3: Ranking Utility ($NDCG@10$)** | $0.0900$ / $0.0778$ | **$0.0672$** | **$0.0518$** | **WARP delivers +29.7% higher recommendation accuracy** |
-| **Tier 4: Latent Effective Rank ($S_{\text{eff}}$)** | $29.7033$ / $31.9633$ | **$29.4864$** | **$31.9628$** | **Smooth, bounded 0.73% contraction (no collapse)** |
-| **Tier 4: Relative Norm Shift ($R_{\text{norm}}$)** | $1.0000$ / $1.0000$ | **$1.0238$** | **$1.0056$** | **Well-conditioned magnitudes (avoids origin collapse)** |
+| **Tier 1: Catalog Exposure Gini ($G$)** | $0.9411$ / $0.9947$ | **$0.8530$** | **$0.9817$** | **WARP lowers Gini by $9.4\%$ and ends $0.1287$ below LightFM BPR** |
+| **Tier 2: User Genre Drift ($D_{\text{KL}}$)** | $7.7234$ / $8.7855$ | **$9.5546$** | **$9.5717$** | **Realized click drift rises for both arms ($+23.7\%$ vs. $+9.0\%$)** |
+| **Tier 3: Ranking Utility ($NDCG@10$)** | $0.0949$ / $0.0788$ | **$0.0367$** | **$0.0301$** | **WARP retains a $+21.9\%$ accuracy edge, but both lose $\approx 61\%$** |
+| **Tier 4: Latent Effective Rank ($S_{\text{eff}}$)** | $29.9581$ / $31.9633$ | **$28.4911$** | **$31.9640$** | **WARP contracts by $4.90\%$; BPR is flat; LightGCN loses $53.0\%$** |
+| **Tier 4: Relative Norm Shift ($R_{\text{norm}}$)** | $1.0000$ / $1.0000$ | **$1.0780$** | **$0.9969$** | **WARP expands modestly ($+7.8\%$); BPR stays flat** |
 
 #### 1. What You Are Looking At:
 * **Top-Left (Catalog Exposure Gini $G$):** Macro catalog inequality. Lower is more egalitarian; $1.0$ is a pure monopoly.
@@ -115,29 +118,29 @@ All benchmarks and longitudinal trajectories are generated from **100% measured 
 * **Bottom-Right (Effective Spectral Rank $S_{\text{eff}}$):** Dimensional breadth of the latent representation space ($d=32$).
 
 #### 2. What is Happening:
-* **WARP Maintains Exposure Diversity:** While BPR remains saturated at $G = 0.9897$, WARP drops to $G = 0.9212$, demonstrating sustained catalog exploration.
-* **The Accuracy Advantage:** WARP preserves utility substantially better over time, degrading gracefully from $0.0900$ to $0.0672$, whereas BPR collapses to $0.0518$.
-* **Spectral Stability:** WARP's effective rank experiences a minuscule contraction of only $-0.21$ dimensions ($29.70 \to 29.49$, or $-0.73\%$), contrasting sharply with LightGCN's $>52\%$ collapse.
+* **WARP Limits Exposure Concentration:** While LightFM BPR remains saturated at $G = 0.9817$, WARP falls to $G = 0.8530$ ($-9.4\%$ from its own baseline), indicating broader catalog exploration.
+* **A Persistent but Bounded Accuracy Edge:** Both arms lose about $61\%$ of their baseline NDCG@10, but WARP ends at $0.0367$ versus $0.0301$ for LightFM BPR ($+21.9\%$).
+* **Slower Spectral Contraction:** WARP loses $1.47$ effective dimensions ($29.96 \to 28.49$, $-4.90\%$), versus a $53.0\%$ collapse for LightGCN and a flat trajectory for LightFM BPR.
 
 ---
 
-## 2D Latent Manifold Dynamics (t-SNE Projections: $t=0$ vs. $t=9$)
+## 2D Latent Manifold Dynamics (t-SNE Projections: $t=0$ vs. $t=49$)
 
 ### Visual 2: Popularity Drift Map & Top-50 Hit Trajectories
-🔗 **Direct Asset Link**: [lightfm/tsne_popularity_drift.png](../images/lightfm/tsne_popularity_drift.png)
+**Direct Asset Link**: [phase_6_lightfm/tsne_popularity_drift.png](../images/phase_6_lightfm/tsne_popularity_drift.png)
 
-![LightFM Popularity Drift](../images/lightfm/tsne_popularity_drift.png)
+![LightFM Popularity Drift](../images/phase_6_lightfm/tsne_popularity_drift.png)
 
-*Figure 2: Joint 2D t-SNE projection of LightFM (WARP) item embeddings at baseline ($t=0$, left) vs. generation $t=9$ (right). Points are colored by $\log(1 + \text{interactions})$. Red displacement arrows track the migration of the top-50 popular hits.*
+*Figure 2: Joint 2D t-SNE projection of LightFM (WARP) item embeddings at baseline ($t=0$, left) vs. generation $t=49$ (right). Points are colored by $\log(1 + \text{interactions})$. Red displacement arrows track the migration of the top-50 popular hits.*
 
 #### 1. What You Are Looking At:
 * A shared-coordinate 2D manifold of all 3,533 movies in MovieLens-1M.
 * **Color Spectrum:** Yellow represents heavy blockbusters ($250+$ ratings); dark purple represents long-tail titles ($<50$ ratings).
-* **Red Vector Arrows:** Track the physical migration of the top-50 blockbuster movies from their initial position to generation 9.
+* **Red Vector Arrows:** Track the physical migration of the top-50 blockbuster movies from their initial position to generation 49.
 
 #### 2. What is Happening:
-* The top-50 blockbuster movies migrate inward into a distinct neighborhood, but they do **not** fuse into an ultra-dense singularity like in LightGCN.
-* Long-tail purple items remain stably distributed across the periphery rather than collapsing into the origin.
+* The top-50 blockbuster movies undergo large, **heterogeneous** displacements: many converge toward denser central regions, but they do **not** fuse into an ultra-dense singularity like in LightGCN.
+* Long-tail purple items stay clustered near the center of the 2D projection rather than being flung to the rim; high-popularity green/yellow items occupy the surrounding neighborhoods. In the full 32-D space, however, tail vectors rotate more than head vectors (cosine drift $0.430$ vs. $0.213$), so this visual stability is only partial.
 
 #### 3. Core Takeaway:
 LightFM's scalar biases and rejection sampling allow popular movies to gravitate toward high-demand regions without dragging the surrounding catalog into a black hole.
@@ -145,18 +148,18 @@ LightFM's scalar biases and rejection sampling allow popular movies to gravitate
 ---
 
 ### Visual 3: Movie Genre Preservation
-🔗 **Direct Asset Link**: [lightfm/tsne_genre_clusters.png](../images/lightfm/tsne_genre_clusters.png)
+**Direct Asset Link**: [phase_6_lightfm/tsne_genre_clusters.png](../images/phase_6_lightfm/tsne_genre_clusters.png)
 
-![LightFM Genre Clusters](../images/lightfm/tsne_genre_clusters.png)
+![LightFM Genre Clusters](../images/phase_6_lightfm/tsne_genre_clusters.png)
 
-*Figure 3: Latent manifold colored across 8 primary movie genres (Action, Comedy, Drama, Thriller, Sci-Fi, Romance, Adventure, Children's) at baseline ($t=0$, left) vs. generation $t=9$ (right).*
+*Figure 3: Latent manifold colored across 8 primary movie genres (Action, Comedy, Drama, Thriller, Sci-Fi, Romance, Adventure, Children's) at baseline ($t=0$, left) vs. generation $t=49$ (right).*
 
 #### 1. What You Are Looking At:
 * The 2D manifold colored by primary film genres to examine whether feedback loops erase content boundaries.
 
 #### 2. What is Happening:
-* At $t=0$, distinct genre clusters are visible (Comedies, Dramas, and Action films occupy different regions).
-* At $t=9$, genre neighborhoods remain cleanly separated. Unlike LightGCN—where genre boundaries washed out into a common "blockbuster composite"—LightFM preserves distinct spatial boundaries for niche genres.
+* At $t=0$, partial genre groupings are visible (for example, Action and Comedy concentrate on the left side of the projection, while Drama dominates the center and right).
+* At $t=49$, these neighborhoods remain partially separated. Unlike LightGCN—where genre boundaries wash out into mixed popularity bands—LightFM preserves more distinct spatial boundaries for niche genres.
 
 #### 3. Core Takeaway:
 Decoupling popularity from semantic vectors preserves genre diversity. A Sci-Fi film and a Romance film can both be blockbusters without having their underlying representations forced together.
@@ -164,68 +167,67 @@ Decoupling popularity from semantic vectors preserves genre diversity. A Sci-Fi 
 ---
 
 ### Visual 4: Latent Space Density Compression (KDE)
-🔗 **Direct Asset Link**: [lightfm/tsne_manifold_density.png](../images/lightfm/tsne_manifold_density.png)
+**Direct Asset Link**: [phase_6_lightfm/tsne_manifold_density.png](../images/phase_6_lightfm/tsne_manifold_density.png)
 
-![LightFM Manifold Density](../images/lightfm/tsne_manifold_density.png)
+![LightFM Manifold Density](../images/phase_6_lightfm/tsne_manifold_density.png)
 
-*Figure 4: 2D Kernel Density Estimation (KDE) contour map comparing spatial item dispersion at baseline ($t=0$, blue) versus post-feedback generation $t=9$ (green).*
+*Figure 4: 2D Kernel Density Estimation (KDE) contour map comparing spatial item dispersion at baseline ($t=0$, blue) versus post-feedback generation $t=49$ (red).*
 
 #### 1. What You Are Looking At:
 * Topographical density contour lines showing where items concentrate in the algorithm's mathematical space.
 
 #### 2. What is Happening:
 * At $t=0$ (blue), items are broadly dispersed across multiple density peaks.
-* At $t=9$ (green), the density contracts modestly around core neighborhoods, but retains a wide, multi-polar landscape.
+* At $t=49$ (red), the density contracts modestly around core neighborhoods, but retains a wide, multi-polar landscape with multiple distinct peaks.
 
 #### 3. Core Takeaway:
-Density contraction in LightFM (WARP) is mild and bounded, proving that the latent space does not suffer from dimensional collapse or point singularities.
+Density contraction in LightFM (WARP) is milder and more bounded than in LightGCN: effective rank contracts by $4.90\%$ versus $53.0\%$, and the manifold retains multiple density peaks rather than collapsing to a point singularity.
 
 ---
 
 ## Dynamic Latent Trajectory Animations (GIF)
 
 ### Animation 1: Dynamic Manifold Drift with Live Gini & Effective Rank
-🔗 **Direct Asset Link**: [lightfm/embedding_drift_trajectory.gif](../images/lightfm/embedding_drift_trajectory.gif)
+**Direct Asset Link**: [phase_6_lightfm/embedding_drift_trajectory.gif](../images/phase_6_lightfm/embedding_drift_trajectory.gif)
 
-![Dynamic Latent Trajectory GIF](../images/lightfm/embedding_drift_trajectory.gif)
+![Dynamic Latent Trajectory GIF](../images/phase_6_lightfm/embedding_drift_trajectory.gif)
 
-*Figure 5: 10-frame animated GIF tracking 2D embedding drift alongside live generation-by-generation measurements of Catalog Exposure Gini ($G$) and Effective Spectral Rank ($S_{\text{eff}}$).*
+*Figure 5: 50-frame animated GIF tracking 2D embedding drift alongside live generation-by-generation measurements of Catalog Exposure Gini ($G$) and Effective Spectral Rank ($S_{\text{eff}}$).*
 
 ---
 
 ### Animation 2: 32-D Quantitative Metric Trajectories across Popularity Tiers
-🔗 **Direct Asset Link**: [lightfm/quantitative_embedding_drift_trajectory.gif](../images/lightfm/quantitative_embedding_drift_trajectory.gif)
+**Direct Asset Link**: [phase_6_lightfm/quantitative_embedding_drift_trajectory.gif](../images/phase_6_lightfm/quantitative_embedding_drift_trajectory.gif)
 
-![32-D Quantitative Drift Animation](../images/lightfm/quantitative_embedding_drift_trajectory.gif)
+![32-D Quantitative Drift Animation](../images/phase_6_lightfm/quantitative_embedding_drift_trajectory.gif)
 
 *Figure 6: Synchronized dual-panel animation pairing 2D latent PCA movement with 32-D mathematical drift metrics (Euclidean Drift, Cosine Drift, and Vector Norm) stratified across Short-tail, Mid-tail, and Long-tail cohorts.*
 
 ### Measured 32-D Quantitative Dynamics (from `lightfm_quantitative_drift_metrics.json`)
 
-| Catalog Cohort | Threshold | 32-D Euclidean Drift ($d_{\text{Euc}}$ at $t=9$) | 32-D Cosine Drift ($d_{\text{Cos}}$ at $t=9$) | Mean Vector L2 Norm ($\|v\|_2$ at $t=9$) |
+| Catalog Cohort | Threshold | 32-D Euclidean Drift ($d_{\text{Euc}}$ at $t=49$) | 32-D Cosine Drift ($d_{\text{Cos}}$ at $t=49$) | Mean Vector L2 Norm ($\|v\|_2$ at $t=49$) |
 | :--- | :--- | :---: | :---: | :---: |
-| **Short-Tail (Hits)** | $\ge 250$ ratings | **$1.861$** | **$0.257$** | **$2.670$** |
-| **Mid-Tail (Torso)** | $50 - 249$ ratings | **$1.773$** | **$0.264$** | **$2.628$** |
-| **Long-Tail (Niche)** | $< 50$ ratings | **$1.810$** | **$0.265$** | **$2.637$** |
+| **Short-Tail (Hits)** | $\ge 250$ ratings | **$2.700$** | **$0.213$** | **$4.326$** |
+| **Mid-Tail (Torso)** | $50 - 249$ ratings | **$1.910$** | **$0.257$** | **$2.743$** |
+| **Long-Tail (Niche)** | $< 50$ ratings | **$1.187$** | **$0.430$** | **$1.456$** |
 
 #### Key Takeaway from 32-D Metrics:
-Unlike LightGCN (which exhibited a **$5.1\times$ drift disparity** between short-tail and long-tail items), LightFM exhibits remarkably **balanced drift velocity** across all three popularity cohorts ($1.861$ vs. $1.773$ vs. $1.810$). Furthermore, vector norms remain virtually identical across tiers ($\sim 2.63 - 2.67$), completely suppressing the norm runaway seen in standard BPR.
+WARP **reduces but does not eliminate** popularity-driven geometry. Short-tail hits move $2.28\times$ farther in Euclidean space than long-tail items ($2.700$ vs. $1.187$), and their mean norm inflates from $3.054$ to $4.326$ ($+41.6\%$), while long-tail norms rise only from $1.367$ to $1.456$ ($+6.5\%$). Cosine drift is actually larger for long-tail items ($0.430$ vs. $0.213$), so tail vectors rotate more even though they translate less. Relative to LightFM BPR's Gini saturation ($0.9817$) and flat effective rank, WARP's lower Gini ($0.8530$) and $4.90\%$ spectral contraction reflect a **milder—not absent—head/tail asymmetry**.
 
 ---
 
 ## Real-World Implications & Core Conclusions
 
-> [!TIP]
 > ### Four Architectural Takeaways for Recommender Systems
 >
-> 1. **Top-of-List Optimization Protects Catalog Diversity:**  
->    Optimizing for full pairwise catalog ordering (BPR) wastes gradient capacity on distant negative pairs. WARP's adaptive sampling focuses gradients where ranking matters (the Top-$K$), preserving exploration in the rest of the catalog.
+> 1. **Top-of-List Optimization Limits Catalog Concentration:**  
+>    Optimizing for full pairwise catalog ordering (BPR) wastes gradient capacity on distant negative pairs. WARP's adaptive sampling focuses gradients where ranking matters (the Top-$K$), and the measured Gini decline ($0.9411 \to 0.8530$) shows broader catalog exposure than LightFM BPR.
 >
 > 2. **Decouple Popularity from Content Representation:**  
->    Recommender models should always incorporate explicit item scalar biases ($b_i$). When popularity volume is absorbed by a scalar, factor vectors remain free to represent authentic content preferences without being dragged toward a universal centroid.
+>    LightFM's explicit item scalar biases ($b_i$) let the model absorb popularity volume without forcing the factor vectors to encode it. This comparison is not a controlled test of biases alone (WARP and BPR also differ in negative sampling), but it shows that decoupling popularity from content is a viable design direction.
 >
 > 3. **The Power of the Gradient "Shut-Off Switch":**  
->    In production feedback loops, models that apply flat, unweighted updates on popular items inevitably suffer from runaway attractors. Margin-based rejection sampling automatically throttles updates to dominant items, shifting optimization pressure to mid-tail discovery.
+>    In production feedback loops, models that apply flat, unweighted updates on popular items inevitably suffer from runaway attractors. Margin-based rejection sampling throttles updates to dominant items and shifts optimization pressure toward broader catalog exposure.
 >
 > 4. **Higher Long-Horizon Accuracy Through Bias Resistance:**  
->    LightFM (WARP) delivered **+29.7% higher NDCG@10** than BPR at generation 9 ($0.0672$ vs. $0.0518$). By refusing to collapse into an echo chamber, it preserved users' multi-genre interests and prevented premature saturation of blockbuster content.
+>    LightFM (WARP) delivered **+21.9% higher NDCG@10** than LightFM BPR at generation 49 ($0.0367$ vs. $0.0301$). It also retained a $4.90\%$-contracted effective rank instead of LightGCN's $53.0\%$ collapse, although both LightFM arms still lost about $61\%$ of their baseline ranking accuracy over the loop.
