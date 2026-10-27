@@ -22,7 +22,8 @@ docs/
 │   ├── phase_2_cornac_benchmark/  # NDCG vs. Gini trade-off frontiers (phase_2_cornac_benchmark.ipynb)
 │   ├── phase_3_mf_pmf_bpr/        # Latent norm histograms, drift & collapse (phase_3_mf_pmf_bpr.ipynb)
 │   ├── phase_4_tsne_visualization/# Trajectories & 2D t-SNE projections (phase_4_tsne_visualization.ipynb)
-│   └── phase_5_lightgcn/          # LightGCN graph bias trajectories & drift (phase_5_lightgcn.ipynb)
+│   ├── phase_5_lightgcn/          # LightGCN graph bias trajectories & drift (phase_5_lightgcn.ipynb)
+│   └── lightfm/                   # LightFM WARP/BPR trajectories & drift (phase_6_lightfm.ipynb)
 │
 ├── notes/                         # Core research notes and phase-by-phase documentation
 │   ├── README.md                  # Comprehensive index of all research notes
@@ -32,6 +33,7 @@ docs/
 │   ├── phase3_beginners_guide.md  # Phase 3: Conceptual guide to the popularity trap
 │   ├── phase4_tsne_visualization.md # Phase 4: t-SNE manifold & closed-loop simulation
 │   ├── phase5_lightgcn.md         # Phase 5: LightGCN graph-powered bias amplification
+│   ├── phase6_lightfm.md          # Phase 6: LightFM pairwise ranking & WARP loss dynamics
 │   ├── recommender_models.md      # Algorithm mathematical formulations & Cornac mappings
 │   └── bias_propagation_and_embedding_dynamics.md # Dynamic feedback loop theory & mechanics
 │
@@ -73,6 +75,7 @@ docs/
 * [**Phase 3: Conceptual Guide**](./notes/phase3_beginners_guide.md)
 * [**Phase 4: Latent Manifold Visualization**](./notes/phase4_tsne_visualization.md)
 * [**Phase 5: LightGCN Graph Bias**](./notes/phase5_lightgcn.md)
+* [**Phase 6: LightFM Pairwise Bias**](./notes/phase6_lightfm.md)
 * [**Recommender Models Reference**](./notes/recommender_models.md)
 * [**Closed-Loop Bias Dynamics Theory**](./notes/bias_propagation_and_embedding_dynamics.md)
 
