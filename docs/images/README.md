@@ -79,12 +79,13 @@ This directory centralizes all visual assets, generated plots, and diagnostic fi
 ### 6. Phase 6: LightFM — Pairwise Ranking & WARP Loss Dynamics ([`phase_6_lightfm/`](./phase_6_lightfm/))
 * **Notebook**: [`notebooks/phase_6_lightfm.ipynb`](../../notebooks/phase_6_lightfm.ipynb)
 * **Research Note**: [`docs/notes/phase6_lightfm.md`](../notes/phase6_lightfm.md)
-* **Visuals & Dynamic Assets**:
-  * `benchmark_trajectories.png`: 4-tier diagnostic trajectory dashboard comparing LightFM (WARP) vs. LightFM (BPR) across 10 generations with $\pm 1\sigma$ error bands.
-  * `tsne_popularity_drift.png`: Joint 2D t-SNE space ($t=0$ vs $t=9$) with red displacement arrows tracking top-50 popular movies, demonstrating loose clustering without catalog-wide collapse.
-  * `tsne_genre_clusters.png`: Genre cluster projections showing spatial preservation of 8 primary movie genres.
-  * `tsne_manifold_density.png`: 2D KDE contour map comparing initial factor dispersion ($t=0$) to post-feedback density ($t=9$).
-  * `embedding_drift_trajectory.gif`: 10-frame animated GIF tracking 2D embedding movement alongside live Catalog Gini and Effective Rank metrics.
-  * `quantitative_embedding_drift_trajectory.gif`: Synchronized dual-panel animation tracking 2D latent PCA movement alongside live 32-D quantitative drift metrics (Euclidean, Cosine, Vector Norm) stratified across Short-tail, Mid-tail, and Long-tail cohorts.
-* **Key Takeaway**: Proves that WARP loss and scalar popularity biases act as built-in brakes against runaway bias propagation, preserving 99% of effective rank ($S_{\text{eff}} = 29.49$) and sustaining +29.7% higher recommendation accuracy than BPR.
+* **Visuals & Dynamic Assets (50 Generations: $t=0 \dots 49$)**:
+  * `benchmark_trajectories.png`: 4-tier diagnostic trajectory dashboard comparing LightFM (WARP) vs. LightFM (BPR) across 50 generations with $\pm 1\sigma$ error bands.
+  * `tsne_popularity_drift.png`: Joint 2D t-SNE space ($t=0$ vs $t=49$) with red displacement arrows tracking Top-30 blockbusters and cyan arrows tracking Bottom-30 tail niche items.
+  * `tsne_genre_clusters.png`: Genre cluster projections showing spatial preservation of 8 primary movie genres across 50 generations.
+  * `tsne_manifold_density.png`: 2D KDE contour map comparing initial factor dispersion ($t=0$) to post-feedback density ($t=49$).
+  * `embedding_drift_trajectory.gif`: 50-frame animated GIF tracking 2D joint t-SNE embedding movement (Top-30 Red, Bottom-30 Cyan) alongside live Catalog Gini and Effective Rank metrics.
+  * `quantitative_embedding_drift_trajectory.gif`: 50-frame dual-panel animation tracking 2D latent PCA movement alongside live 32-D quantitative drift metrics (Euclidean, Cosine, Vector Norm) stratified across Short-tail, Mid-tail, and Long-tail cohorts.
+  * `quantitative_embedding_drift_trajectory_tsne.gif`: 50-frame dual-panel animation tracking 2D joint t-SNE coordinate manifold movement (Top-30 Red, Bottom-30 Cyan) alongside live 32-D quantitative drift metrics.
+* **Key Takeaway**: Proves that WARP loss and scalar popularity biases act as built-in brakes against runaway bias propagation, preserving 97.6% of effective rank ($S_{\text{eff}} = 28.99$) and sustaining +24.3% higher recommendation accuracy than BPR across 50 generations.
 

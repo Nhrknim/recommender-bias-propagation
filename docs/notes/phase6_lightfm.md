@@ -208,12 +208,21 @@ Density contraction in LightFM (WARP) is mild and bounded, proving that the late
 
 ---
 
-### Animation 2: 32-D Quantitative Metric Trajectories across Popularity Tiers
+### Animation 2A: 32-D Quantitative Metric Trajectories with PCA Latent Space
 🔗 **Direct Asset Link**: [phase_6_lightfm/quantitative_embedding_drift_trajectory.gif](../images/phase_6_lightfm/quantitative_embedding_drift_trajectory.gif)
 
-![32-D Quantitative Drift Animation](../images/phase_6_lightfm/quantitative_embedding_drift_trajectory.gif)
+![32-D Quantitative Drift Animation (PCA)](../images/phase_6_lightfm/quantitative_embedding_drift_trajectory.gif)
 
-*Figure 6: Synchronized dual-panel 50-frame animation pairing 2D latent PCA movement (tracking Top-30 Red and Bottom-30 Cyan trajectories) with 32-D mathematical drift metrics (Euclidean Drift, Cosine Drift, and Vector Norm) stratified across Short-tail, Mid-tail, and Long-tail cohorts.*
+*Figure 6: Synchronized dual-panel 50-frame animation pairing 2D global linear PCA movement (tracking Top-30 Red and Bottom-30 Cyan trajectories) with 32-D mathematical drift metrics (Euclidean Drift, Cosine Drift, and Vector Norm) stratified across Short-tail, Mid-tail, and Long-tail cohorts.*
+
+---
+
+### Animation 2B: 32-D Quantitative Metric Trajectories with Joint t-SNE Manifold
+🔗 **Direct Asset Link**: [phase_6_lightfm/quantitative_embedding_drift_trajectory_tsne.gif](../images/phase_6_lightfm/quantitative_embedding_drift_trajectory_tsne.gif)
+
+![32-D Quantitative Drift Animation (t-SNE)](../images/phase_6_lightfm/quantitative_embedding_drift_trajectory_tsne.gif)
+
+*Figure 7: Synchronized dual-panel 50-frame animation pairing 2D joint t-SNE coordinate manifold movement (tracking Top-30 Red and Bottom-30 Cyan trajectories) with 32-D mathematical drift metrics (Euclidean Drift, Cosine Drift, and Vector Norm) stratified across Short-tail, Mid-tail, and Long-tail cohorts.*
 
 ### Measured 32-D Quantitative Dynamics (from `lightfm_quantitative_drift_metrics.json`)
 
