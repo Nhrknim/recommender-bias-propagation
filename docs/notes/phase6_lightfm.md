@@ -189,7 +189,7 @@ Density contraction in LightFM (WARP) is mild and bounded, proving that the late
 
 ![Dynamic Latent Trajectory GIF](../images/phase_6_lightfm/embedding_drift_trajectory.gif)
 
-*Figure 5: 50-frame animated GIF ($T=50$) tracking 2D embedding drift alongside live generation-by-generation measurements of Catalog Exposure Gini ($G$) and Effective Spectral Rank ($S_{\text{eff}}$).*
+*Figure 5: 50-frame animated GIF ($T=50$) tracking 2D joint t-SNE embedding drift alongside live generation-by-generation measurements of Catalog Exposure Gini ($G$) and Effective Spectral Rank ($S_{\text{eff}}$), directly matching the coordinate space of Figure 2.*
 
 ---
 

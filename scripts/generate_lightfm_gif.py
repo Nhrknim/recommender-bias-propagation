@@ -7,6 +7,7 @@ import scipy.sparse as sp
 import matplotlib.pyplot as plt
 from PIL import Image
 from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 
 # Ensure root directory is on python path
 sys.path.insert(0, ".")
@@ -90,18 +91,33 @@ def main():
         np.save(cache_path, np.array(item_embeddings_history))
         print(f"[OK] Saved item embeddings cache to '{cache_path}'")
 
-    # 3. Project to shared 2D coordinate system using PCA fitted on baseline V_star
-    print("\n[Phase 3] Computing shared 2D coordinate projections...")
-    pca = PCA(n_components=2, random_state=42)
-    pca.fit(V_star)
+    # 3. Compute or load Joint 2D t-SNE coordinate projections
+    print("\n[Phase 3] Computing Joint 2D t-SNE coordinate projections...")
+    tsne_cache_path = "docs/benchmarks/lightfm_warp_tsne_2d.npy"
+    if os.path.exists(tsne_cache_path):
+        print(f"  * Loading cached joint t-SNE coordinates from '{tsne_cache_path}'...")
+        joint_2d = np.load(tsne_cache_path)
+    else:
+        joint_embeddings = np.vstack([item_embeddings_history[0], item_embeddings_history[-1]])
+        tsne = TSNE(n_components=2, perplexity=30, learning_rate="auto", init="pca", random_state=42)
+        joint_2d = tsne.fit_transform(joint_embeddings)
+        np.save(tsne_cache_path, joint_2d)
 
-    projections_2d = [pca.transform(V) for V in item_embeddings_history]
+    coords_0 = joint_2d[:n_items]
+    coords_49 = joint_2d[n_items:]
+
+    # Compute interpolated t-SNE positions across generations matching Phase 5 pattern
+    projections_2d = []
+    for t in range(T):
+        progress = t / (T - 1)
+        coords_curr = (1.0 - progress) * coords_0 + progress * coords_49
+        projections_2d.append(coords_curr)
 
     # Determine stable coordinate axes bounds across all generations
-    all_x = np.concatenate([p[:, 0] for p in projections_2d])
-    all_y = np.concatenate([p[:, 1] for p in projections_2d])
-    x_min, x_max = np.min(all_x) - 0.5, np.max(all_x) + 0.5
-    y_min, y_max = np.min(all_y) - 0.5, np.max(all_y) + 0.5
+    all_x = joint_2d[:, 0]
+    all_y = joint_2d[:, 1]
+    x_min, x_max = np.min(all_x) - 3.0, np.max(all_x) + 3.0
+    y_min, y_max = np.min(all_y) - 3.0, np.max(all_y) + 3.0
 
     # 4. Render animation frames
     print(f"\n[Phase 4] Rendering {T} animation frames...")
@@ -158,8 +174,8 @@ def main():
         ax_map.set_xlim(x_min, x_max)
         ax_map.set_ylim(y_min, y_max)
         ax_map.set_title(f"LightFM (WARP): 2D Latent Manifold Drift [Gen t = {t}]", fontsize=13, fontweight="bold")
-        ax_map.set_xlabel("Latent Principal Component 1", fontsize=10)
-        ax_map.set_ylabel("Latent Principal Component 2", fontsize=10)
+        ax_map.set_xlabel("t-SNE Dimension 1", fontsize=10)
+        ax_map.set_ylabel("t-SNE Dimension 2", fontsize=10)
         ax_map.legend(loc="upper right", frameon=True, fontsize=9)
         cbar = fig.colorbar(sc, ax=ax_map, orientation="horizontal", pad=0.1, fraction=0.045)
         cbar.set_label("Item Log-Popularity (Yellow = Head Hits, Purple = Tail)", fontsize=9)

@@ -126,42 +126,48 @@ def generate_tsne_manifold_plots(output_dir: str):
                 g_list = str(row["genres"]).split("|")
                 primary_genres[code] = g_list[0] if len(g_list) > 0 else "Other"
 
-    # 1. Train initial baseline t=0
-    print("[Phase 2] Training LightFM (WARP) Baseline at t=0...")
-    adapter_0 = LightFMAdapter(dim=32, loss="warp", epochs=5, learning_rate=0.005)
-    adapter_0.fit(train_mat, seed=42)
-    U_0, V_0 = adapter_0.get_embeddings()
-
-    # 2. Simulate 49 generations of closed feedback loop to obtain t=49
-    print("[Phase 3] Running 49 closed-loop generations to obtain t=49 state...")
-    D_t = train_mat.copy()
-    active_users = np.arange(n_users, dtype=np.int32)
-    U_star = U_0.copy()
-    V_star = V_0.copy()
-
-    for t in range(49):
-        recs = adapter_0.recommend(active_users, k=10, remove_seen=True)
-        pop_counts = np.asarray(D_t.sum(axis=0)).flatten()
-        u_clicks, i_clicks = simulate_user_clicks(
-            recs=recs,
-            U_star=U_star,
-            V_star=V_star,
-            pop_counts=pop_counts,
-            alpha=0.8,
-            tau=1.0,
-            seed=42 + t
-        )
-        D_t = merge_and_deduplicate(D_t, (u_clicks, i_clicks))
+    tsne_cache_path = "docs/benchmarks/lightfm_warp_tsne_2d.npy"
+    if os.path.exists(tsne_cache_path):
+        print(f"[Phase 2-4] Loading cached joint 2D t-SNE Projection from '{tsne_cache_path}'...")
+        joint_2d = np.load(tsne_cache_path)
+    else:
+        # 1. Train initial baseline t=0
+        print("[Phase 2] Training LightFM (WARP) Baseline at t=0...")
         adapter_0 = LightFMAdapter(dim=32, loss="warp", epochs=5, learning_rate=0.005)
-        adapter_0.fit(D_t, seed=42 + t + 1)
+        adapter_0.fit(train_mat, seed=42)
+        U_0, V_0 = adapter_0.get_embeddings()
 
-    U_49, V_49 = adapter_0.get_embeddings()
+        # 2. Simulate 49 generations of closed feedback loop to obtain t=49
+        print("[Phase 3] Running 49 closed-loop generations to obtain t=49 state...")
+        D_t = train_mat.copy()
+        active_users = np.arange(n_users, dtype=np.int32)
+        U_star = U_0.copy()
+        V_star = V_0.copy()
 
-    # 3. Compute Joint t-SNE 2D manifold projection
-    print("[Phase 4] Computing Joint 2D t-SNE Projection across (V_0, V_49)...")
-    joint_embeddings = np.vstack([V_0, V_49])
-    tsne = TSNE(n_components=2, perplexity=30, learning_rate="auto", init="pca", random_state=42)
-    joint_2d = tsne.fit_transform(joint_embeddings)
+        for t in range(49):
+            recs = adapter_0.recommend(active_users, k=10, remove_seen=True)
+            pop_counts = np.asarray(D_t.sum(axis=0)).flatten()
+            u_clicks, i_clicks = simulate_user_clicks(
+                recs=recs,
+                U_star=U_star,
+                V_star=V_star,
+                pop_counts=pop_counts,
+                alpha=0.8,
+                tau=1.0,
+                seed=42 + t
+            )
+            D_t = merge_and_deduplicate(D_t, (u_clicks, i_clicks))
+            adapter_0 = LightFMAdapter(dim=32, loss="warp", epochs=5, learning_rate=0.005)
+            adapter_0.fit(D_t, seed=42 + t + 1)
+
+        U_49, V_49 = adapter_0.get_embeddings()
+
+        # 3. Compute Joint t-SNE 2D manifold projection
+        print("[Phase 4] Computing Joint 2D t-SNE Projection across (V_0, V_49)...")
+        joint_embeddings = np.vstack([V_0, V_49])
+        tsne = TSNE(n_components=2, perplexity=30, learning_rate="auto", init="pca", random_state=42)
+        joint_2d = tsne.fit_transform(joint_embeddings)
+        np.save(tsne_cache_path, joint_2d)
 
     proj_0 = joint_2d[:n_items]
     proj_49 = joint_2d[n_items:]
