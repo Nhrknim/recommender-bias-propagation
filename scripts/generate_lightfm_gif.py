@@ -36,6 +36,7 @@ def main():
     base_pop = np.asarray(train_mat.sum(axis=0)).flatten()
     log_pop = np.log1p(base_pop)
     top30_items = np.argsort(-base_pop)[:30]
+    bottom30_items = np.argsort(base_pop)[:30]
 
     # Load pre-computed metrics from benchmark run for the live dashboards
     candidates = [f for f in os.listdir("docs/benchmarks") if f.startswith("lightfm_run_") and f.endswith(".json")]
@@ -143,32 +144,47 @@ def main():
             edgecolors="none"
         )
 
-        # Draw motion trails and arrows for top-30 blockbuster items from t=0 to current t
+        # Draw motion trails and arrows for top-30 and bottom-30 items from t=0 to current t
         if t > 0:
-            p0 = projections_2d[0]
             for idx in top30_items:
-                # Path history
                 path_x = [projections_2d[step][idx, 0] for step in range(t + 1)]
                 path_y = [projections_2d[step][idx, 1] for step in range(t + 1)]
-                ax_map.plot(path_x, path_y, color="red", lw=1.2, alpha=0.5)
-
-                # Arrow pointing to current location
+                ax_map.plot(path_x, path_y, color="#e41a1c", lw=1.2, alpha=0.6)
                 ax_map.annotate(
                     "",
                     xy=(current_proj[idx, 0], current_proj[idx, 1]),
                     xytext=(path_x[-2], path_y[-2]),
-                    arrowprops=dict(arrowstyle="->", color="red", lw=1.5, alpha=0.9)
+                    arrowprops=dict(arrowstyle="->", color="#e41a1c", lw=1.4, alpha=0.9)
+                )
+            for idx in bottom30_items:
+                path_x = [projections_2d[step][idx, 0] for step in range(t + 1)]
+                path_y = [projections_2d[step][idx, 1] for step in range(t + 1)]
+                ax_map.plot(path_x, path_y, color="#00e5ff", lw=1.2, alpha=0.6)
+                ax_map.annotate(
+                    "",
+                    xy=(current_proj[idx, 0], current_proj[idx, 1]),
+                    xytext=(path_x[-2], path_y[-2]),
+                    arrowprops=dict(arrowstyle="->", color="#00e5ff", lw=1.4, alpha=0.9)
                 )
 
-        # Highlight current top-30 items with yellow stars
+        # Highlight current top-30 and bottom-30 items
         ax_map.scatter(
             current_proj[top30_items, 0],
             current_proj[top30_items, 1],
-            color="red",
-            s=35,
+            color="#e41a1c",
+            s=40,
             edgecolors="black",
-            linewidth=0.5,
-            label="Top-30 Blockbusters"
+            linewidth=0.6,
+            label="Top-30 Blockbusters (Red)"
+        )
+        ax_map.scatter(
+            current_proj[bottom30_items, 0],
+            current_proj[bottom30_items, 1],
+            color="#00e5ff",
+            s=40,
+            edgecolors="black",
+            linewidth=0.6,
+            label="Bottom-30 Niche Tail (Cyan)"
         )
 
         ax_map.set_xlim(x_min, x_max)

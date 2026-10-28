@@ -175,7 +175,8 @@ def generate_tsne_manifold_plots(output_dir: str):
     # Base popularity counts
     base_pop = np.asarray(train_mat.sum(axis=0)).flatten()
     log_pop = np.log1p(base_pop)
-    top50_items = np.argsort(-base_pop)[:50]
+    top30_items = np.argsort(-base_pop)[:30]
+    bottom30_items = np.argsort(base_pop)[:30]
 
     # --- Plot 1: Popularity Drift Map ---
     print("[Plot 1] Generating tsne_popularity_drift.png...")
@@ -183,25 +184,44 @@ def generate_tsne_manifold_plots(output_dir: str):
 
     # t=0
     sc0 = axes[0].scatter(proj_0[:, 0], proj_0[:, 1], c=log_pop, cmap="viridis", s=18, alpha=0.75)
+    axes[0].scatter(proj_0[top30_items, 0], proj_0[top30_items, 1], color="#e41a1c", s=40, edgecolors="black", linewidth=0.6, label="Top-30 Blockbusters (Hits)")
+    axes[0].scatter(proj_0[bottom30_items, 0], proj_0[bottom30_items, 1], color="#00e5ff", s=40, edgecolors="black", linewidth=0.6, label="Bottom-30 Niche Tail")
     axes[0].set_title("LightFM (WARP): Baseline Latent Space ($t=0$)", fontsize=14, fontweight="bold")
     axes[0].set_xlabel("t-SNE Dimension 1", fontsize=11)
     axes[0].set_ylabel("t-SNE Dimension 2", fontsize=11)
+    axes[0].legend(loc="upper right", frameon=True, fontsize=9)
     fig.colorbar(sc0, ax=axes[0], label="Log1p(Popularity Interaction Count)")
 
     # t=49 with drift arrows
     sc49 = axes[1].scatter(proj_49[:, 0], proj_49[:, 1], c=log_pop, cmap="viridis", s=18, alpha=0.75)
-    for idx in top50_items:
+    
+    # Red arrows for Top-30 blockbusters
+    for idx in top30_items:
         x0, y0 = proj_0[idx]
         x1, y1 = proj_49[idx]
         axes[1].annotate(
             "",
             xy=(x1, y1),
             xytext=(x0, y0),
-            arrowprops=dict(arrowstyle="->", color="red", lw=1.2, alpha=0.8)
+            arrowprops=dict(arrowstyle="->", color="#e41a1c", lw=1.3, alpha=0.85)
         )
-    axes[1].set_title("LightFM (WARP): 50-Gen Post-Feedback Drift ($t=49$)\nRed Arrows: Top-50 Popular Hits Movement", fontsize=14, fontweight="bold")
+    # Cyan arrows for Bottom-30 long-tail items
+    for idx in bottom30_items:
+        x0, y0 = proj_0[idx]
+        x1, y1 = proj_49[idx]
+        axes[1].annotate(
+            "",
+            xy=(x1, y1),
+            xytext=(x0, y0),
+            arrowprops=dict(arrowstyle="->", color="#00e5ff", lw=1.3, alpha=0.85)
+        )
+
+    axes[1].scatter(proj_49[top30_items, 0], proj_49[top30_items, 1], color="#e41a1c", s=45, edgecolors="black", linewidth=0.6, label="Top-30 Blockbusters (Red Arrows)")
+    axes[1].scatter(proj_49[bottom30_items, 0], proj_49[bottom30_items, 1], color="#00e5ff", s=45, edgecolors="black", linewidth=0.6, label="Bottom-30 Niche Tail (Cyan Arrows)")
+    axes[1].set_title("LightFM (WARP): 50-Gen Post-Feedback Drift ($t=49$)\nRed: Top-30 Hits Migration | Cyan: Bottom-30 Tail Stability", fontsize=14, fontweight="bold")
     axes[1].set_xlabel("t-SNE Dimension 1", fontsize=11)
     axes[1].set_ylabel("t-SNE Dimension 2", fontsize=11)
+    axes[1].legend(loc="upper right", frameon=True, fontsize=9)
     fig.colorbar(sc49, ax=axes[1], label="Log1p(Popularity Interaction Count)")
 
     plt.tight_layout()

@@ -40,6 +40,7 @@ def main():
     base_pop = np.asarray(train_mat.sum(axis=0)).flatten()
     log_pop = np.log1p(base_pop)
     top30_items = np.argsort(-base_pop)[:30]
+    bottom30_items = np.argsort(base_pop)[:30]
 
     # Partition catalog into popularity tiers matching repository standard:
     # Short-tail: >= 250 ratings
@@ -60,62 +61,68 @@ def main():
 
     # 2. Run simulation and compute 32-D quantitative drift metrics
     print(f"\n[Phase 2] Simulating {T} generations of closed-loop LightFM (WARP)...")
-    item_embeddings_history = []
-    
-    # Storage for quantitative drift metrics across time
-    # Each list holds values for t=0..T-1
-    cohort_metrics = {
-        "short": {"euc": [], "cos": [], "norm": []},
-        "mid":   {"euc": [], "cos": [], "norm": []},
-        "long":  {"euc": [], "cos": [], "norm": []},
-    }
+    emb_cache_path = f"docs/benchmarks/lightfm_warp_embeddings_{T}t.npy"
+    if os.path.exists(emb_cache_path) and os.path.exists(json_path):
+        print(f"  * Loading cached embeddings from '{emb_cache_path}'...")
+        item_embeddings_history = list(np.load(emb_cache_path))
+        V_star = item_embeddings_history[0]
+        print(f"  * Loading pre-computed metrics from '{json_path}'...")
+        with open(json_path, "r", encoding="utf-8") as f:
+            cohort_metrics = json.load(f)
+    else:
+        item_embeddings_history = []
+        cohort_metrics = {
+            "short": {"euc": [], "cos": [], "norm": []},
+            "mid":   {"euc": [], "cos": [], "norm": []},
+            "long":  {"euc": [], "cos": [], "norm": []},
+        }
 
-    # Initial baseline fit t=0
-    adapter = LightFMAdapter(dim=32, loss="warp", epochs=5, learning_rate=0.005)
-    adapter.fit(D_t, seed=42)
-    U_star, V_star = adapter.get_embeddings()
-    item_embeddings_history.append(V_star.copy())
-
-    # Baseline metrics at t=0
-    d_euc_0, d_cos_0, norms_0, _ = compute_drift_metrics_32d(V_star, V_star)
-    for mask, key in [(short_mask, "short"), (mid_mask, "mid"), (long_mask, "long")]:
-        cohort_metrics[key]["euc"].append(float(np.mean(d_euc_0[mask])))
-        cohort_metrics[key]["cos"].append(float(np.mean(d_cos_0[mask])))
-        cohort_metrics[key]["norm"].append(float(np.mean(norms_0[mask])))
-
-    for t in range(1, T):
-        print(f"  * Simulating Generation t={t}...")
-        recs = adapter.recommend(active_users, k=10, remove_seen=True)
-        pop_counts = np.asarray(D_t.sum(axis=0)).flatten()
-        u_clicks, i_clicks = simulate_user_clicks(
-            recs=recs,
-            U_star=U_star,
-            V_star=V_star,
-            pop_counts=pop_counts,
-            alpha=0.8,
-            tau=1.0,
-            seed=42 + t
-        )
-        D_t = merge_and_deduplicate(D_t, (u_clicks, i_clicks))
+        # Initial baseline fit t=0
         adapter = LightFMAdapter(dim=32, loss="warp", epochs=5, learning_rate=0.005)
-        adapter.fit(D_t, seed=42 + t)
-        _, V_t = adapter.get_embeddings()
+        adapter.fit(D_t, seed=42)
+        U_star, V_star = adapter.get_embeddings()
+        item_embeddings_history.append(V_star.copy())
 
-        # Procrustes align V_t to baseline V_star
-        V_t_aligned = compute_reflection_corrected_procrustes(V_star, V_t)
-        item_embeddings_history.append(V_t_aligned)
-
-        # Compute full 32-D quantitative drift metrics
-        d_euc, d_cos, norms_t, _ = compute_drift_metrics_32d(V_star, V_t_aligned)
+        # Baseline metrics at t=0
+        d_euc_0, d_cos_0, norms_0, _ = compute_drift_metrics_32d(V_star, V_star)
         for mask, key in [(short_mask, "short"), (mid_mask, "mid"), (long_mask, "long")]:
-            cohort_metrics[key]["euc"].append(float(np.mean(d_euc[mask])))
-            cohort_metrics[key]["cos"].append(float(np.mean(d_cos[mask])))
-            cohort_metrics[key]["norm"].append(float(np.mean(norms_t[mask])))
+            cohort_metrics[key]["euc"].append(float(np.mean(d_euc_0[mask])))
+            cohort_metrics[key]["cos"].append(float(np.mean(d_cos_0[mask])))
+            cohort_metrics[key]["norm"].append(float(np.mean(norms_0[mask])))
 
-    # Save quantitative metrics to JSON
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(cohort_metrics, f, indent=2)
-    print(f"[OK] Quantitative drift metrics saved to '{json_path}'")
+        for t in range(1, T):
+            print(f"  * Simulating Generation t={t}...")
+            recs = adapter.recommend(active_users, k=10, remove_seen=True)
+            pop_counts = np.asarray(D_t.sum(axis=0)).flatten()
+            u_clicks, i_clicks = simulate_user_clicks(
+                recs=recs,
+                U_star=U_star,
+                V_star=V_star,
+                pop_counts=pop_counts,
+                alpha=0.8,
+                tau=1.0,
+                seed=42 + t
+            )
+            D_t = merge_and_deduplicate(D_t, (u_clicks, i_clicks))
+            adapter = LightFMAdapter(dim=32, loss="warp", epochs=5, learning_rate=0.005)
+            adapter.fit(D_t, seed=42 + t)
+            _, V_t = adapter.get_embeddings()
+
+            # Procrustes align V_t to baseline V_star
+            V_t_aligned = compute_reflection_corrected_procrustes(V_star, V_t)
+            item_embeddings_history.append(V_t_aligned)
+
+            # Compute full 32-D quantitative drift metrics
+            d_euc, d_cos, norms_t, _ = compute_drift_metrics_32d(V_star, V_t_aligned)
+            for mask, key in [(short_mask, "short"), (mid_mask, "mid"), (long_mask, "long")]:
+                cohort_metrics[key]["euc"].append(float(np.mean(d_euc[mask])))
+                cohort_metrics[key]["cos"].append(float(np.mean(d_cos[mask])))
+                cohort_metrics[key]["norm"].append(float(np.mean(norms_t[mask])))
+
+        # Save quantitative metrics to JSON
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(cohort_metrics, f, indent=2)
+        print(f"[OK] Quantitative drift metrics saved to '{json_path}'")
 
     # 3. Project to shared 2D coordinate space for visual panel
     print("\n[Phase 3] Computing 2D PCA projection for visual panel...")
@@ -174,22 +181,41 @@ def main():
             for idx in top30_items:
                 path_x = [projections_2d[step][idx, 0] for step in range(t + 1)]
                 path_y = [projections_2d[step][idx, 1] for step in range(t + 1)]
-                ax_map.plot(path_x, path_y, color="red", lw=1.2, alpha=0.5)
+                ax_map.plot(path_x, path_y, color="#e41a1c", lw=1.2, alpha=0.6)
                 ax_map.annotate(
                     "",
                     xy=(current_proj[idx, 0], current_proj[idx, 1]),
                     xytext=(path_x[-2], path_y[-2]),
-                    arrowprops=dict(arrowstyle="->", color="red", lw=1.5, alpha=0.9)
+                    arrowprops=dict(arrowstyle="->", color="#e41a1c", lw=1.4, alpha=0.9)
+                )
+            for idx in bottom30_items:
+                path_x = [projections_2d[step][idx, 0] for step in range(t + 1)]
+                path_y = [projections_2d[step][idx, 1] for step in range(t + 1)]
+                ax_map.plot(path_x, path_y, color="#00e5ff", lw=1.2, alpha=0.6)
+                ax_map.annotate(
+                    "",
+                    xy=(current_proj[idx, 0], current_proj[idx, 1]),
+                    xytext=(path_x[-2], path_y[-2]),
+                    arrowprops=dict(arrowstyle="->", color="#00e5ff", lw=1.4, alpha=0.9)
                 )
 
         ax_map.scatter(
             current_proj[top30_items, 0],
             current_proj[top30_items, 1],
-            color="red",
-            s=35,
+            color="#e41a1c",
+            s=40,
             edgecolors="black",
-            linewidth=0.5,
-            label="Top-30 Blockbusters"
+            linewidth=0.6,
+            label="Top-30 Blockbusters (Red)"
+        )
+        ax_map.scatter(
+            current_proj[bottom30_items, 0],
+            current_proj[bottom30_items, 1],
+            color="#00e5ff",
+            s=40,
+            edgecolors="black",
+            linewidth=0.6,
+            label="Bottom-30 Niche Tail (Cyan)"
         )
 
         ax_map.set_xlim(x_min, x_max)
@@ -201,6 +227,8 @@ def main():
         cbar = fig.colorbar(sc, ax=ax_map, orientation="horizontal", pad=0.08, fraction=0.045)
         cbar.set_label("Item Log-Popularity (Yellow = Head Hits, Purple = Tail)", fontsize=9)
 
+        tick_step = 5 if T <= 50 else 10
+
         # Right Panel 1 (Top): 32-D Mean Euclidean Drift
         ax_euc = fig.add_subplot(gs[0, 1])
         for k in ["short", "mid", "long"]:
@@ -211,7 +239,7 @@ def main():
         ax_euc.set_ylabel(r"Mean $d_{\mathrm{Euc}}$", fontsize=10, fontweight="bold")
         ax_euc.set_title(r"32-D Euclidean Drift: $\|v_i^{(t)\mathrm{aligned}} - v_i^{(0)}\|_2$", fontsize=11, fontweight="bold")
         ax_euc.legend(loc="upper left", frameon=True, fontsize=8)
-        ax_euc.set_xticks(all_t)
+        ax_euc.set_xticks(range(0, T, tick_step))
 
         # Right Panel 2 (Middle): 32-D Mean Cosine Drift
         ax_cos = fig.add_subplot(gs[1, 1])
@@ -223,7 +251,7 @@ def main():
         ax_cos.set_ylabel(r"Mean $d_{\mathrm{Cos}}$", fontsize=10, fontweight="bold")
         ax_cos.set_title(r"32-D Cosine Drift: $1 - \cos(v_i^{(t)\mathrm{aligned}}, v_i^{(0)})$", fontsize=11, fontweight="bold")
         ax_cos.legend(loc="upper left", frameon=True, fontsize=8)
-        ax_cos.set_xticks(all_t)
+        ax_cos.set_xticks(range(0, T, tick_step))
 
         # Right Panel 3 (Bottom): 32-D Mean Vector Norm
         ax_norm = fig.add_subplot(gs[2, 1])
@@ -236,7 +264,7 @@ def main():
         ax_norm.set_title(r"32-D Vector Norm Magnitude: $\|v_i^{(t)}\|_2$", fontsize=11, fontweight="bold")
         ax_norm.set_xlabel("Generation (t)", fontsize=10)
         ax_norm.legend(loc="upper left", frameon=True, fontsize=8)
-        ax_norm.set_xticks(all_t)
+        ax_norm.set_xticks(range(0, T, tick_step))
 
         buf = io.BytesIO()
         plt.savefig(buf, format="png", bbox_inches="tight")

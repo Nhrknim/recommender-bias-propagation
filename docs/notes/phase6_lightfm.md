@@ -123,24 +123,39 @@ All benchmarks and longitudinal trajectories are generated from **100% measured 
 
 ## 2D Latent Manifold Dynamics (t-SNE Projections: Baseline $t=0$ vs. Post-Feedback $t=49$)
 
-### Visual 2: Popularity Drift Map & Top-50 Hit Trajectories
+### Visual 2: Popularity Drift Map — Top-30 Blockbusters vs. Bottom-30 Tail Niche
 🔗 **Direct Asset Link**: [phase_6_lightfm/tsne_popularity_drift.png](../images/phase_6_lightfm/tsne_popularity_drift.png)
 
 ![LightFM Popularity Drift](../images/phase_6_lightfm/tsne_popularity_drift.png)
 
-*Figure 2: Joint 2D t-SNE projection of LightFM (WARP) item embeddings at baseline ($t=0$, left) vs. generation $t=49$ (right). Points are colored by $\log(1 + \text{interactions})$. Red displacement arrows track the migration of the top-50 popular hits across 50 closed-loop feedback generations.*
+*Figure 2: Joint 2D t-SNE projection of LightFM (WARP) item embeddings at baseline ($t=0$, left) vs. generation $t=49$ (right). Points are colored by $\log(1 + \text{interactions})$. Red displacement arrows track the migration of the Top-30 popular blockbusters, while Cyan displacement arrows track the Bottom-30 long-tail niche items across 50 closed-loop feedback generations.*
 
 #### 1. What You Are Looking At:
 * A shared-coordinate 2D manifold of all 3,533 movies in MovieLens-1M.
 * **Color Spectrum:** Yellow represents heavy blockbusters ($250+$ ratings); dark purple represents long-tail titles ($<50$ ratings).
-* **Red Vector Arrows:** Track the physical migration of the top-50 blockbuster movies from their initial position to generation 49.
+* **Red Vector Arrows:** Track the physical migration of the **Top-30 blockbuster movies** from their initial position to generation 49.
+* **Cyan Vector Arrows:** Track the physical migration of the **Bottom-30 long-tail niche movies** (0 baseline implicit interactions) from their initial position to generation 49.
 
 #### 2. What is Happening:
-* Over 50 generations of closed-loop feedback, the top-50 blockbuster movies migrate inward into a distinct neighborhood, but they do **not** fuse into an ultra-dense singularity like in LightGCN.
-* Long-tail purple items remain stably distributed across the periphery rather than collapsing into the origin.
+* **Head Item Dynamics (Red):** The Top-30 blockbuster movies migrate actively across the manifold (average 2D t-SNE displacement of **$37.22$**), coalescing into a distinct high-demand cluster without fusing into a singular collapsed point mass.
+* **Tail Item Dynamics (Cyan):** The Bottom-30 long-tail items exhibit over **$3.2\times$ less spatial displacement** (average 2D displacement of **$11.56$**). They remain stably anchored across the manifold periphery rather than collapsing into the origin.
+* **Complete Suppression of Origin Collapse:** Unlike standard Matrix Factorization (where cold items collapse to $\|v\| \to 0$ at the origin) or unregularized BPR (where tail items are pushed to runaway outer spheres), LightFM's tail items maintain healthy, non-zero magnitudes ($\|v\|_2 \approx 0.58 \to 0.60$).
 
 #### 3. Core Takeaway:
-LightFM's scalar biases and rejection sampling allow popular movies to gravitate toward high-demand regions without dragging the surrounding catalog into a black hole.
+Decoupling volume into scalar biases ($b_i$) and utilizing margin-based rank rejection sampling protects both ends of the catalog: blockbusters gravitate toward high-demand demand zones without dragging the catalog into a singularity, while cold tail items remain stably positioned in the semantic latent space.
+
+---
+
+### Top-30 Blockbusters vs. Bottom-30 Tail Niche Dynamics ($t=0 \to t=49$)
+
+| Diagnostic Dimension | Top-30 Blockbusters (Head) | Bottom-30 Tail Niche (Cold Tail) | Comparative Dynamics & Empirical Finding |
+| :--- | :---: | :---: | :--- |
+| **Baseline Interactions** | $1,395 - 2,648$ ratings | $0$ positive implicit ratings | Complete spectrum between macro hits and extreme cold tail |
+| **32-D Euclidean Drift ($d_{\text{Euc}}$)** | **$2.1390$** | **$0.8287$** | Head hits drift **$2.58\times$ faster** in full 32-D Euclidean representation space |
+| **32-D Cosine Drift ($d_{\text{Cos}}$)** | **$0.9280$** | **$0.9944$** | Both cohorts adjust angular alignment to feedback |
+| **Latent Vector Norm ($\|v\|_2$) at $t=0$** | **$1.8137$** | **$0.5771$** | Initial separation in latent representation scale |
+| **Latent Vector Norm ($\|v\|_2$) at $t=49$** | **$1.2839$** | **$0.6049$** | **Anti-Collapse Proof:** Tail norm slightly increases ($+4.8\%$); origin collapse is completely eliminated |
+| **Mean 2D t-SNE Displacement** | **$37.22$ units** | **$11.56$ units** | Head blockbusters migrate **$3.22\times$ further** across the low-dimensional manifold |
 
 ---
 
@@ -189,7 +204,7 @@ Density contraction in LightFM (WARP) is mild and bounded, proving that the late
 
 ![Dynamic Latent Trajectory GIF](../images/phase_6_lightfm/embedding_drift_trajectory.gif)
 
-*Figure 5: 50-frame animated GIF ($T=50$) tracking 2D joint t-SNE embedding drift alongside live generation-by-generation measurements of Catalog Exposure Gini ($G$) and Effective Spectral Rank ($S_{\text{eff}}$), directly matching the coordinate space of Figure 2.*
+*Figure 5: 50-frame animated GIF ($T=50$) tracking 2D joint t-SNE embedding drift alongside live generation-by-generation measurements of Catalog Exposure Gini ($G$) and Effective Spectral Rank ($S_{\text{eff}}$). Red trails track Top-30 Blockbusters; Cyan trails track Bottom-30 Tail Niche items.*
 
 ---
 
@@ -198,7 +213,7 @@ Density contraction in LightFM (WARP) is mild and bounded, proving that the late
 
 ![32-D Quantitative Drift Animation](../images/phase_6_lightfm/quantitative_embedding_drift_trajectory.gif)
 
-*Figure 6: Synchronized dual-panel 50-frame animation pairing 2D latent PCA movement with 32-D mathematical drift metrics (Euclidean Drift, Cosine Drift, and Vector Norm) stratified across Short-tail, Mid-tail, and Long-tail cohorts.*
+*Figure 6: Synchronized dual-panel 50-frame animation pairing 2D latent PCA movement (tracking Top-30 Red and Bottom-30 Cyan trajectories) with 32-D mathematical drift metrics (Euclidean Drift, Cosine Drift, and Vector Norm) stratified across Short-tail, Mid-tail, and Long-tail cohorts.*
 
 ### Measured 32-D Quantitative Dynamics (from `lightfm_quantitative_drift_metrics.json`)
 
