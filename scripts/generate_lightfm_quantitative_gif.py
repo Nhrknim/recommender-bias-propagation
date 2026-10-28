@@ -27,7 +27,7 @@ def main():
     print("  LIGHTFM (WARP) 32-D QUANTITATIVE EMBEDDING DRIFT TRAJECTORY SIMULATION")
     print("=" * 80)
 
-    output_dir = "docs/images/lightfm"
+    output_dir = "docs/images/phase_6_lightfm"
     os.makedirs(output_dir, exist_ok=True)
     gif_path = os.path.join(output_dir, "quantitative_embedding_drift_trajectory.gif")
     json_path = os.path.join("docs/benchmarks", "lightfm_quantitative_drift_metrics.json")
@@ -54,7 +54,7 @@ def main():
     print(f"  * Mid-tail (50-249):   {np.sum(mid_mask):,} movies ({np.sum(base_pop[mid_mask]):,} interactions)")
     print(f"  * Long-tail (< 50):    {np.sum(long_mask):,} movies ({np.sum(base_pop[long_mask]):,} interactions)")
 
-    T = 10
+    T = 50
     active_users = np.arange(n_users, dtype=np.int32)
     D_t = train_mat.copy()
 
@@ -249,7 +249,7 @@ def main():
         gif_path,
         save_all=True,
         append_images=frames[1:],
-        duration=700,
+        duration=200,
         loop=0
     )
 

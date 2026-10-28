@@ -13,7 +13,7 @@ This directory centralizes all visual assets, generated plots, and diagnostic fi
 | [`notebooks/phase_3_mf_pmf_bpr.ipynb`](../../notebooks/phase_3_mf_pmf_bpr.ipynb) | [`phase_3_mf_pmf_bpr/`](./phase_3_mf_pmf_bpr/) | Latent embedding norm shifts, origin collapse, and angular drift plots |
 | [`notebooks/phase_4_tsne_visualization.ipynb`](../../notebooks/phase_4_tsne_visualization.ipynb) | [`phase_4_tsne_visualization/`](./phase_4_tsne_visualization/) | 4-tier benchmark trajectories, 2D t-SNE drift vectors, genre clusters, and KDE densities |
 | [`notebooks/phase_5_lightgcn.ipynb`](../../notebooks/phase_5_lightgcn.ipynb) | [`phase_5_lightgcn/`](./phase_5_lightgcn/) | LightGCN 4-tier bias trajectories, graph-structural popularity drift, genre homogenisation, manifold collapse, and 50-generation drift GIFs |
-| [`notebooks/phase_6_lightfm.ipynb`](../../notebooks/phase_6_lightfm.ipynb) | [`lightfm/`](./lightfm/) | LightFM (WARP vs. BPR) 4-tier benchmark trajectories, 2D t-SNE popularity drift, genre preservation, KDE density maps, and 32-D quantitative drift GIFs |
+| [`notebooks/phase_6_lightfm.ipynb`](../../notebooks/phase_6_lightfm.ipynb) | [`phase_6_lightfm/`](./phase_6_lightfm/) | LightFM (WARP vs. BPR) 4-tier benchmark trajectories, 2D t-SNE popularity drift, genre preservation, KDE density maps, and 32-D quantitative drift GIFs |
 
 ---
 
@@ -76,7 +76,7 @@ This directory centralizes all visual assets, generated plots, and diagnostic fi
 
 ---
 
-### 6. Phase 6: LightFM — Pairwise Ranking & WARP Loss Dynamics ([`lightfm/`](./lightfm/))
+### 6. Phase 6: LightFM — Pairwise Ranking & WARP Loss Dynamics ([`phase_6_lightfm/`](./phase_6_lightfm/))
 * **Notebook**: [`notebooks/phase_6_lightfm.ipynb`](../../notebooks/phase_6_lightfm.ipynb)
 * **Research Note**: [`docs/notes/phase6_lightfm.md`](../notes/phase6_lightfm.md)
 * **Visuals & Dynamic Assets**:

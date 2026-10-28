@@ -23,7 +23,7 @@ def main():
     print("  GENERATING LIGHTFM (WARP) EMBEDDING DRIFT TRAJECTORY ANIMATION (GIF)")
     print("=" * 80)
 
-    output_dir = "docs/images/lightfm"
+    output_dir = "docs/images/phase_6_lightfm"
     os.makedirs(output_dir, exist_ok=True)
     gif_path = os.path.join(output_dir, "embedding_drift_trajectory.gif")
 
@@ -37,7 +37,8 @@ def main():
     top30_items = np.argsort(-base_pop)[:30]
 
     # Load pre-computed metrics from benchmark run for the live dashboards
-    json_path = "docs/benchmarks/lightfm_run_20261024_210634_775a03.json"
+    candidates = [f for f in os.listdir("docs/benchmarks") if f.startswith("lightfm_run_") and f.endswith(".json")]
+    json_path = os.path.join("docs/benchmarks", sorted(candidates)[-1]) if candidates else "docs/benchmarks/lightfm_run_20261024_210634_775a03.json"
     with open(json_path, "r", encoding="utf-8") as f:
         bench_data = json.load(f)
 
@@ -51,35 +52,43 @@ def main():
     D_t = train_mat.copy()
     active_users = np.arange(n_users, dtype=np.int32)
 
-    item_embeddings_history = []
-
-    # Initial baseline fit t=0
-    adapter = LightFMAdapter(dim=32, loss="warp", epochs=5, learning_rate=0.005)
-    adapter.fit(D_t, seed=42)
-    U_star, V_star = adapter.get_embeddings()
-    item_embeddings_history.append(V_star.copy())
-
-    for t in range(1, T):
-        print(f"  * Simulating Generation t={t}...")
-        recs = adapter.recommend(active_users, k=10, remove_seen=True)
-        pop_counts = np.asarray(D_t.sum(axis=0)).flatten()
-        u_clicks, i_clicks = simulate_user_clicks(
-            recs=recs,
-            U_star=U_star,
-            V_star=V_star,
-            pop_counts=pop_counts,
-            alpha=0.8,
-            tau=1.0,
-            seed=42 + t
-        )
-        D_t = merge_and_deduplicate(D_t, (u_clicks, i_clicks))
+    cache_path = f"docs/benchmarks/lightfm_warp_embeddings_{T}t.npy"
+    if os.path.exists(cache_path):
+        print(f"  * Loading cached item embeddings from '{cache_path}'...")
+        item_embeddings_history = list(np.load(cache_path))
+        V_star = item_embeddings_history[0]
+    else:
+        item_embeddings_history = []
+        # Initial baseline fit t=0
         adapter = LightFMAdapter(dim=32, loss="warp", epochs=5, learning_rate=0.005)
-        adapter.fit(D_t, seed=42 + t)
-        _, V_t = adapter.get_embeddings()
+        adapter.fit(D_t, seed=42)
+        U_star, V_star = adapter.get_embeddings()
+        item_embeddings_history.append(V_star.copy())
 
-        # Procrustes align V_t to baseline V_star to eliminate rotational ambiguity
-        V_t_aligned = compute_reflection_corrected_procrustes(V_star, V_t)
-        item_embeddings_history.append(V_t_aligned)
+        for t in range(1, T):
+            print(f"  * Simulating Generation t={t}...", flush=True)
+            recs = adapter.recommend(active_users, k=10, remove_seen=True)
+            pop_counts = np.asarray(D_t.sum(axis=0)).flatten()
+            u_clicks, i_clicks = simulate_user_clicks(
+                recs=recs,
+                U_star=U_star,
+                V_star=V_star,
+                pop_counts=pop_counts,
+                alpha=0.8,
+                tau=1.0,
+                seed=42 + t
+            )
+            D_t = merge_and_deduplicate(D_t, (u_clicks, i_clicks))
+            adapter = LightFMAdapter(dim=32, loss="warp", epochs=5, learning_rate=0.005)
+            adapter.fit(D_t, seed=42 + t)
+            _, V_t = adapter.get_embeddings()
+
+            # Procrustes align V_t to baseline V_star to eliminate rotational ambiguity
+            V_t_aligned = compute_reflection_corrected_procrustes(V_star, V_t)
+            item_embeddings_history.append(V_t_aligned)
+
+        np.save(cache_path, np.array(item_embeddings_history))
+        print(f"[OK] Saved item embeddings cache to '{cache_path}'")
 
     # 3. Project to shared 2D coordinate system using PCA fitted on baseline V_star
     print("\n[Phase 3] Computing shared 2D coordinate projections...")
@@ -163,7 +172,11 @@ def main():
         ax_gini.scatter([t], [gini_curve[t]], color="red", s=60, zorder=5)
         ax_gini.set_title(f"Live Catalog Exposure Gini: {gini_curve[t]:.4f}", fontsize=11, fontweight="bold")
         ax_gini.set_ylabel("Gini ($G$)", fontsize=9)
-        ax_gini.set_xticks(all_t)
+        if T <= 15:
+            ax_gini.set_xticks(all_t)
+        else:
+            step = 5 if T <= 50 else 10
+            ax_gini.set_xticks(range(0, T, step))
         ax_gini.legend(loc="upper right", fontsize=8)
 
         # Right Bottom Panel: Live Latent Manifold Effective Rank
@@ -174,7 +187,11 @@ def main():
         ax_rank.set_title(f"Live Latent Space Effective Rank $S_{{\\text{{eff}}}}$: {seff_curve[t]:.4f}", fontsize=11, fontweight="bold")
         ax_rank.set_xlabel("Generation ($t$)", fontsize=9)
         ax_rank.set_ylabel("Spectral Rank $S_{\\text{eff}}$", fontsize=9)
-        ax_rank.set_xticks(all_t)
+        if T <= 15:
+            ax_rank.set_xticks(all_t)
+        else:
+            step = 5 if T <= 50 else 10
+            ax_rank.set_xticks(range(0, T, step))
         ax_rank.legend(loc="upper right", fontsize=8)
 
         fig.suptitle(f"Closed-Loop Recommendation Feedback Dynamics — Generation {t} of {T - 1}", fontsize=15, fontweight="bold", y=0.98)
@@ -186,18 +203,18 @@ def main():
         buf.seek(0)
         frame_img = Image.open(buf)
         frames.append(frame_img)
-        print(f"  * Frame {t + 1}/{T} rendered.")
+        print(f"  * Frame {t + 1}/{T} rendered.", flush=True)
 
     # 5. Compile and save animated GIF
-    print(f"\n[Phase 5] Saving animated GIF to {gif_path}...")
+    print(f"\n[Phase 5] Saving animated GIF to {gif_path}...", flush=True)
     frames[0].save(
         gif_path,
         save_all=True,
         append_images=frames[1:],
-        duration=650,  # 650 ms per frame
+        duration=200,  # 200 ms per frame
         loop=0
     )
-    print(f"[SUCCESS] Animated GIF created: {gif_path} ({os.path.getsize(gif_path) / 1024 / 1024:.2f} MB)")
+    print(f"[SUCCESS] Animated GIF created: {gif_path} ({os.path.getsize(gif_path) / 1024 / 1024:.2f} MB)", flush=True)
 
 
 if __name__ == "__main__":

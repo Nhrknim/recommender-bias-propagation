@@ -23,7 +23,8 @@ docs/
 │   ├── phase_3_mf_pmf_bpr/        # Latent norm histograms, drift & collapse (phase_3_mf_pmf_bpr.ipynb)
 │   ├── phase_4_tsne_visualization/# Trajectories & 2D t-SNE projections (phase_4_tsne_visualization.ipynb)
 │   ├── phase_5_lightgcn/          # LightGCN graph bias trajectories & drift (phase_5_lightgcn.ipynb)
-│   └── lightfm/                   # LightFM WARP/BPR trajectories & drift (phase_6_lightfm.ipynb)
+│   └── phase_6_lightfm/           # LightFM WARP/BPR trajectories & drift (phase_6_lightfm.ipynb)
+
 │
 ├── notes/                         # Core research notes and phase-by-phase documentation
 │   ├── README.md                  # Comprehensive index of all research notes

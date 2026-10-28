@@ -7,7 +7,10 @@ from src.adapters.cornac_adapters import (
     CornacUserKNNAdapter,
     CornacMostPopAdapter,
 )
-from src.adapters.lightgcn_adapter import LightGCNAdapter
+try:
+    from src.adapters.lightgcn_adapter import LightGCNAdapter
+except ImportError:
+    LightGCNAdapter = None
 
 __all__ = [
     "BaseRecommenderAdapter",
@@ -18,3 +21,4 @@ __all__ = [
     "CornacMostPopAdapter",
     "LightGCNAdapter",
 ]
+

@@ -49,7 +49,7 @@ def main():
     ]
 
     seeds = [42, 123, 456]
-    T = 10
+    T = 50
     K = 10
     alpha = 0.8  # Social conformity weight matching repository benchmark standard
 

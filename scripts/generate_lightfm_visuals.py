@@ -132,14 +132,14 @@ def generate_tsne_manifold_plots(output_dir: str):
     adapter_0.fit(train_mat, seed=42)
     U_0, V_0 = adapter_0.get_embeddings()
 
-    # 2. Simulate 9 generations of closed feedback loop to obtain t=9
-    print("[Phase 3] Running 9 closed-loop generations to obtain t=9 state...")
+    # 2. Simulate 49 generations of closed feedback loop to obtain t=49
+    print("[Phase 3] Running 49 closed-loop generations to obtain t=49 state...")
     D_t = train_mat.copy()
     active_users = np.arange(n_users, dtype=np.int32)
     U_star = U_0.copy()
     V_star = V_0.copy()
 
-    for t in range(9):
+    for t in range(49):
         recs = adapter_0.recommend(active_users, k=10, remove_seen=True)
         pop_counts = np.asarray(D_t.sum(axis=0)).flatten()
         u_clicks, i_clicks = simulate_user_clicks(
@@ -155,16 +155,16 @@ def generate_tsne_manifold_plots(output_dir: str):
         adapter_0 = LightFMAdapter(dim=32, loss="warp", epochs=5, learning_rate=0.005)
         adapter_0.fit(D_t, seed=42 + t + 1)
 
-    U_9, V_9 = adapter_0.get_embeddings()
+    U_49, V_49 = adapter_0.get_embeddings()
 
     # 3. Compute Joint t-SNE 2D manifold projection
-    print("[Phase 4] Computing Joint 2D t-SNE Projection across (V_0, V_9)...")
-    joint_embeddings = np.vstack([V_0, V_9])
+    print("[Phase 4] Computing Joint 2D t-SNE Projection across (V_0, V_49)...")
+    joint_embeddings = np.vstack([V_0, V_49])
     tsne = TSNE(n_components=2, perplexity=30, learning_rate="auto", init="pca", random_state=42)
     joint_2d = tsne.fit_transform(joint_embeddings)
 
     proj_0 = joint_2d[:n_items]
-    proj_9 = joint_2d[n_items:]
+    proj_49 = joint_2d[n_items:]
 
     # Base popularity counts
     base_pop = np.asarray(train_mat.sum(axis=0)).flatten()
@@ -182,21 +182,21 @@ def generate_tsne_manifold_plots(output_dir: str):
     axes[0].set_ylabel("t-SNE Dimension 2", fontsize=11)
     fig.colorbar(sc0, ax=axes[0], label="Log1p(Popularity Interaction Count)")
 
-    # t=9 with drift arrows
-    sc9 = axes[1].scatter(proj_9[:, 0], proj_9[:, 1], c=log_pop, cmap="viridis", s=18, alpha=0.75)
+    # t=49 with drift arrows
+    sc49 = axes[1].scatter(proj_49[:, 0], proj_49[:, 1], c=log_pop, cmap="viridis", s=18, alpha=0.75)
     for idx in top50_items:
         x0, y0 = proj_0[idx]
-        x1, y1 = proj_9[idx]
+        x1, y1 = proj_49[idx]
         axes[1].annotate(
             "",
             xy=(x1, y1),
             xytext=(x0, y0),
             arrowprops=dict(arrowstyle="->", color="red", lw=1.2, alpha=0.8)
         )
-    axes[1].set_title("LightFM (WARP): Post-Feedback Drift ($t=9$)\nRed Arrows: Top-50 Popular Hits Movement", fontsize=14, fontweight="bold")
+    axes[1].set_title("LightFM (WARP): 50-Gen Post-Feedback Drift ($t=49$)\nRed Arrows: Top-50 Popular Hits Movement", fontsize=14, fontweight="bold")
     axes[1].set_xlabel("t-SNE Dimension 1", fontsize=11)
     axes[1].set_ylabel("t-SNE Dimension 2", fontsize=11)
-    fig.colorbar(sc9, ax=axes[1], label="Log1p(Popularity Interaction Count)")
+    fig.colorbar(sc49, ax=axes[1], label="Log1p(Popularity Interaction Count)")
 
     plt.tight_layout()
     pop_drift_path = os.path.join(output_dir, "tsne_popularity_drift.png")
@@ -216,14 +216,14 @@ def generate_tsne_manifold_plots(output_dir: str):
     for g in unique_labels:
         mask = [cg == g for cg in clean_genres]
         axes[0].scatter(proj_0[mask, 0], proj_0[mask, 1], label=g, color=genre2color[g], s=18, alpha=0.7)
-        axes[1].scatter(proj_9[mask, 0], proj_9[mask, 1], label=g, color=genre2color[g], s=18, alpha=0.7)
+        axes[1].scatter(proj_49[mask, 0], proj_49[mask, 1], label=g, color=genre2color[g], s=18, alpha=0.7)
 
     axes[0].set_title("LightFM (WARP): Baseline Genre Manifold ($t=0$)", fontsize=14, fontweight="bold")
     axes[0].set_xlabel("t-SNE Dimension 1", fontsize=11)
     axes[0].set_ylabel("t-SNE Dimension 2", fontsize=11)
     axes[0].legend(loc="upper right", markerscale=2, fontsize=9)
 
-    axes[1].set_title("LightFM (WARP): 10-Gen Post-Feedback Genre Manifold ($t=9$)", fontsize=14, fontweight="bold")
+    axes[1].set_title("LightFM (WARP): 50-Gen Post-Feedback Genre Manifold ($t=49$)", fontsize=14, fontweight="bold")
     axes[1].set_xlabel("t-SNE Dimension 1", fontsize=11)
     axes[1].set_ylabel("t-SNE Dimension 2", fontsize=11)
     axes[1].legend(loc="upper right", markerscale=2, fontsize=9)
@@ -244,9 +244,9 @@ def generate_tsne_manifold_plots(output_dir: str):
     axes[0].set_xlabel("t-SNE Dimension 1", fontsize=11)
     axes[0].set_ylabel("t-SNE Dimension 2", fontsize=11)
 
-    sns.kdeplot(x=proj_9[:, 0], y=proj_9[:, 1], ax=axes[1], cmap="Reds", fill=True, thresh=0.05, levels=15)
-    axes[1].scatter(proj_9[:, 0], proj_9[:, 1], color="#d62728", s=5, alpha=0.25)
-    axes[1].set_title("LightFM (WARP): 10-Gen Concentrated Manifold Density ($t=9$)", fontsize=14, fontweight="bold")
+    sns.kdeplot(x=proj_49[:, 0], y=proj_49[:, 1], ax=axes[1], cmap="Reds", fill=True, thresh=0.05, levels=15)
+    axes[1].scatter(proj_49[:, 0], proj_49[:, 1], color="#d62728", s=5, alpha=0.25)
+    axes[1].set_title("LightFM (WARP): 50-Gen Concentrated Manifold Density ($t=49$)", fontsize=14, fontweight="bold")
     axes[1].set_xlabel("t-SNE Dimension 1", fontsize=11)
     axes[1].set_ylabel("t-SNE Dimension 2", fontsize=11)
 
@@ -258,8 +258,14 @@ def generate_tsne_manifold_plots(output_dir: str):
 
 
 def main():
-    json_path = "docs/benchmarks/lightfm_run_20261024_210634_775a03.json"
-    output_dir = "docs/images/lightfm"
+    json_path = "docs/benchmarks/lightfm_benchmark_results.json"
+    if not os.path.exists(json_path):
+        # Fall back to latest available JSON
+        candidates = [f for f in os.listdir("docs/benchmarks") if f.startswith("lightfm_run_") and f.endswith(".json")]
+        if candidates:
+            json_path = os.path.join("docs/benchmarks", sorted(candidates)[-1])
+
+    output_dir = "docs/images/phase_6_lightfm"
     os.makedirs(output_dir, exist_ok=True)
 
     print("=" * 80)
